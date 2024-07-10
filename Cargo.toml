@@ -1,0 +1,12 @@
+[package]
+name = "cs5610"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+  "project-01-hello-world"
+]
+
+[workspace.dependencies]
+glium = "0.34.0"
