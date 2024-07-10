@@ -10,3 +10,4 @@ members = [
 
 [workspace.dependencies]
 glium = "0.34.0"
+winit = "^0.29"

@@ -818,6 +818,7 @@ name = "project-01-hello-world"
 version = "0.1.0"
 dependencies = [
  "glium",
+ "winit",
 ]
 
 [[package]]
