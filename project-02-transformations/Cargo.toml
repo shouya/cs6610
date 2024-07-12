@@ -1,0 +1,9 @@
+[package]
+name = "project-02-transformations"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glium = { workspace = true }
+winit = { workspace = true }
+cgmath = { workspace = true }

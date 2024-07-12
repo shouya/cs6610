@@ -5,9 +5,11 @@ edition = "2021"
 
 [workspace]
 members = [
-  "project-01-hello-world"
+  "project-01-hello-world",
+  "project-02-transformations",
 ]
 
 [workspace.dependencies]
 glium = "0.34.0"
 winit = "^0.29"
+cgmath = "0.18.0"
