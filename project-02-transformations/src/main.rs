@@ -3,11 +3,10 @@ mod obj_loader;
 use std::{mem::size_of, path::Path, time::Duration};
 
 use glium::{
-  backend::{glutin::SimpleWindowBuilder, Facade},
-  glutin::surface::WindowSurface,
-  program::SourceCode,
+  backend::Facade, glutin::surface::WindowSurface, program::SourceCode,
   uniform, Display, Frame, Program, Surface, VertexBuffer,
 };
+
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -16,7 +15,7 @@ use winit::{
   window::{Window, WindowId},
 };
 
-use cgmath::{Matrix4, SquareMatrix};
+use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use obj_loader::RawObj;
 
@@ -99,7 +98,8 @@ impl World {
     };
 
     teapot.rotation += dt.as_secs_f32() * teapot.rotation_speed;
-    let m_model = Matrix4::from_angle_y(cgmath::Rad(teapot.rotation));
+    let m_model = Matrix4::from_translation(Vector3::new(0.0, 0.0, 1.0))
+      * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation));
     teapot.mvp = self.m_proj * self.m_view * m_model;
   }
 }
@@ -180,7 +180,7 @@ const VF_F32x3: glium::vertex::VertexFormat = &[(
   std::borrow::Cow::Borrowed("pos"),
   // byte offset
   0,
-  // what's this?
+  // this field was undocomented, maybe stride?
   0,
   // attribute type (F32F32F32)
   glium::vertex::AttributeType::F32F32F32,
@@ -282,9 +282,9 @@ fn main() -> Result<()> {
   let event_loop = EventLoopBuilder::with_user_event()
     .build()
     .expect("Failed to create event loop");
-  let (window, display) = SimpleWindowBuilder::new()
-    .with_title("Hello world!")
-    .build(&event_loop);
+  let window = Window::new(&event_loop)?;
+  let display = init_display(&window);
+
   let event_loop_proxy = event_loop.create_proxy();
   let mut app = App::new(window, display, event_loop_proxy)?;
 
@@ -310,4 +310,64 @@ fn main() -> Result<()> {
   })?;
 
   Ok(())
+}
+
+// I would use glutin::SimpleWindowBuilder but it has no way to turn
+// on debug with the public API.
+fn init_display(window: &Window) -> Display<WindowSurface> {
+  use glium::{
+    debug::DebugCallbackBehavior,
+    glutin::{
+      context::NotCurrentGlContext,
+      display::{DisplayApiPreference, GlDisplay as _},
+      surface::SurfaceAttributesBuilder,
+    },
+  };
+  use raw_window_handle::{HasRawDisplayHandle as _, HasRawWindowHandle as _};
+
+  let display_handle = window.raw_display_handle();
+  let window_handle = window.raw_window_handle();
+
+  let disp = unsafe {
+    glium::glutin::display::Display::new(
+      display_handle,
+      DisplayApiPreference::Egl,
+    )
+    .expect("Failed to create display")
+  };
+
+  eprintln!("GL Version: {}", disp.version_string());
+
+  let config = unsafe {
+    disp
+      .find_configs(Default::default())
+      .expect("Failed to find configs")
+      .next()
+      .expect("No config found")
+  };
+  let context = unsafe {
+    disp
+      .create_context(&config, &Default::default())
+      .expect("Failed to create context")
+  };
+  let surface_attr = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+    window_handle,
+    window.inner_size().width.try_into().unwrap(),
+    window.inner_size().height.try_into().unwrap(),
+  );
+  let surface = unsafe {
+    disp
+      .create_window_surface(&config, &surface_attr)
+      .expect("Failed to create surface")
+  };
+  let context = context
+    .make_current(&surface)
+    .expect("Failed to make context current");
+
+  Display::with_debug(
+    context,
+    surface,
+    DebugCallbackBehavior::DebugMessageOnError,
+  )
+  .expect("Failed to create display")
 }
