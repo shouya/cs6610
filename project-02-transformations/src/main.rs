@@ -4,7 +4,7 @@ use std::{mem::size_of, path::Path, time::Duration};
 
 use glium::{
   backend::Facade, glutin::surface::WindowSurface, program::SourceCode,
-  uniform, Display, Frame, Program, Surface, VertexBuffer,
+  uniform, Display, DrawParameters, Frame, Program, Surface, VertexBuffer,
 };
 
 use winit::{
@@ -61,7 +61,7 @@ struct Teapot {
 
 impl World {
   fn update(&mut self, dt: Duration) {
-    self.update_bg_color(dt);
+    // self.update_bg_color(dt);
     self.rotate_teapot(dt);
   }
 
@@ -83,7 +83,8 @@ impl World {
     Ok(())
   }
 
-  fn update_bg_color(&mut self, dt: Duration) {
+  #[allow(unused)]
+  fn gupdate_bg_color(&mut self, dt: Duration) {
     self.t += dt.as_secs_f32();
     let t = self.t;
     let r = t.sin().abs();
@@ -98,8 +99,11 @@ impl World {
     };
 
     teapot.rotation += dt.as_secs_f32() * teapot.rotation_speed;
-    let m_model = Matrix4::from_translation(Vector3::new(0.0, 0.0, 1.0))
-      * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation));
+    let m_model = Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0))
+      * Matrix4::from_scale(0.02)
+      * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation))
+      // the object itself is rotated 90 to the front, let's rotate it back a little.
+      * Matrix4::from_angle_x(cgmath::Deg(-90.0));
     teapot.mvp = self.m_proj * self.m_view * m_model;
   }
 }
@@ -130,6 +134,7 @@ impl Teapot {
     model: &RawObj,
     program: Program,
   ) -> Result<Self> {
+    eprintln!("Loaded model with {} vertices", model.v.len());
     let model_vbo = unsafe {
       VertexBuffer::new_raw(context, &model.v, VF_F32x3, size_of::<[f32; 3]>())?
     };
@@ -145,9 +150,13 @@ impl Teapot {
   }
 
   fn draw(&self, frame: &mut Frame) -> Result<()> {
-    let mpv: [[f32; 4]; 4] = self.mvp.into();
+    let mvp: [[f32; 4]; 4] = self.mvp.into();
     let uniforms = uniform! {
-      mvp: mpv
+      mvp: mvp
+    };
+
+    let draw_params = DrawParameters {
+      ..Default::default()
     };
 
     frame.draw(
@@ -155,7 +164,7 @@ impl Teapot {
       glium::index::NoIndices(glium::index::PrimitiveType::Points),
       &self.program,
       &uniforms,
-      &Default::default(),
+      &draw_params,
     )?;
 
     Ok(())
@@ -180,7 +189,7 @@ const VF_F32x3: glium::vertex::VertexFormat = &[(
   std::borrow::Cow::Borrowed("pos"),
   // byte offset
   0,
-  // this field was undocomented, maybe stride?
+  // this field was undocumented, maybe stride?
   0,
   // attribute type (F32F32F32)
   glium::vertex::AttributeType::F32F32F32,
