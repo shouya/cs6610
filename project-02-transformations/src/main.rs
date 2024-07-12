@@ -15,7 +15,7 @@ use winit::{
   window::{Window, WindowId},
 };
 
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Point3, SquareMatrix, Vector3};
 
 use obj_loader::RawObj;
 
@@ -30,17 +30,25 @@ enum UserSignal {
 struct World {
   t: f32,
   clear_color: [f32; 4],
+  // world space to camera space
   m_view: Matrix4<f32>,
+  // view space to clip space
   m_proj: Matrix4<f32>,
   teapot: Option<Teapot>,
 }
 
 impl World {
   fn new() -> Self {
+    // default view matrix: eye at (0, 0, 2), looking at (0, 0, -1), up (0, 1, 0)
+    let eye = Point3::new(0.0, 0.0, 2.0);
+    let dir = Vector3::new(0.0, 0.0, -1.0);
+    let up = Vector3::new(0.0, 1.0, 0.0);
+    let m_view = Matrix4::look_to_rh(eye, dir, up);
+
     Self {
       t: 0.0,
       clear_color: [0.0, 0.0, 0.0, 1.0],
-      m_view: Matrix4::identity(),
+      m_view,
       m_proj: Matrix4::identity(),
       teapot: None,
     }
@@ -63,6 +71,14 @@ impl World {
   fn update(&mut self, dt: Duration) {
     // self.update_bg_color(dt);
     self.rotate_teapot(dt);
+  }
+
+  fn update_view(&mut self, rect: PhysicalSize<u32>) {
+    let aspect_ratio = rect.width as f32 / rect.height as f32;
+
+    // fov, aspect ratio, near, far
+    self.m_proj =
+      cgmath::perspective(cgmath::Deg(60.0), aspect_ratio, 0.1, 100.0);
   }
 
   fn render(
@@ -99,8 +115,8 @@ impl World {
     };
 
     teapot.rotation += dt.as_secs_f32() * teapot.rotation_speed;
-    let m_model = Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0))
-      * Matrix4::from_scale(0.02)
+    let m_model = Matrix4::from_translation(Vector3::new(0.0, -0.5, -1.0))
+      * Matrix4::from_scale(0.05)
       * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation))
       // the object itself is rotated 90 to the front, let's rotate it back a little.
       * Matrix4::from_angle_x(cgmath::Deg(-90.0));
@@ -156,6 +172,7 @@ impl Teapot {
     };
 
     let draw_params = DrawParameters {
+      point_size: Some(2.0),
       ..Default::default()
     };
 
@@ -243,6 +260,7 @@ impl App {
 
   fn handle_resize(&mut self, size: PhysicalSize<u32>) {
     println!("Resized to {:?}", size);
+    self.world.update_view(size);
   }
 
   fn handle_keyboard(
