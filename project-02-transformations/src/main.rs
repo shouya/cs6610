@@ -17,7 +17,7 @@ use winit::{
 
 use cgmath::{Deg, Euler, Matrix3, Matrix4, Point3, SquareMatrix, Vector3};
 
-use obj_loader::RawObj;
+use common::RawObj;
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;

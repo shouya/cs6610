@@ -5,6 +5,7 @@ edition = "2021"
 
 [workspace]
 members = [
+  "common",
   "project-01-hello-world",
   "project-02-transformations",
 ]

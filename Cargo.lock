@@ -261,6 +261,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -854,6 +858,7 @@ name = "project-02-transformations"
 version = "0.1.0"
 dependencies = [
  "cgmath",
+ "common",
  "glium",
  "raw-window-handle 0.5.2",
  "winit",
