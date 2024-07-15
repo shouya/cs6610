@@ -1,9 +1,12 @@
+mod mesh;
 mod teapot;
 
-use std::{fmt::Debug, path::Path, time::Duration};
+use derive_more::From;
+use std::{fmt::Debug, time::Duration};
 
-use glium::{glutin::surface::WindowSurface, Display, Surface};
+use glium::{glutin::surface::WindowSurface, Display, Frame, Surface};
 
+use mesh::TriangleListGPU;
 use teapot::Teapot;
 use winit::{
   dpi::PhysicalSize,
@@ -20,12 +23,14 @@ use common::Axis;
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
-const SHADER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
-const MODEL_PATH: &str = "assets/teapot.obj";
-
 #[derive(Debug)]
 enum UserSignal {
   Quit,
+}
+
+#[derive(From)]
+enum TeapotKind {
+  TrigList(Teapot<TriangleListGPU>),
 }
 
 struct World {
@@ -33,7 +38,21 @@ struct World {
   camera: Camera,
   show_axis: bool,
   axis: Option<Axis>,
-  teapot: Option<Teapot>,
+  teapot: Option<TeapotKind>,
+}
+
+impl TeapotKind {
+  fn update(&mut self, dt: Duration) {
+    match self {
+      Self::TrigList(teapot) => teapot.update(dt),
+    }
+  }
+
+  fn draw(&self, frame: &mut Frame, camera: &Camera) -> Result<()> {
+    match self {
+      Self::TrigList(teapot) => teapot.draw(frame, camera),
+    }
+  }
 }
 
 struct Camera {
@@ -117,8 +136,8 @@ impl World {
     }
   }
 
-  fn set_teapot(&mut self, teapot: Teapot) {
-    self.teapot = Some(teapot);
+  fn set_teapot<T: Into<TeapotKind>>(&mut self, teapot: T) {
+    self.teapot = Some(teapot.into());
   }
 
   fn set_axis(&mut self, axis: Axis) {
@@ -285,15 +304,6 @@ impl App {
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
-    } else if event.logical_key == NamedKey::F6 {
-      if let Some(teapot) = self.world.teapot.as_mut() {
-        if let Err(e) = teapot.recompile_shader(&self.display) {
-          eprintln!("Failed to recompile shader: {}", e);
-        } else {
-          println!("Recompiled shader");
-          self.window.request_redraw();
-        }
-      }
     }
   }
 
@@ -406,14 +416,13 @@ fn main() -> Result<()> {
   let event_loop_proxy = event_loop.create_proxy();
   let mut app = App::new(window, display, event_loop_proxy)?;
 
-  let teapot = Teapot::load_file(
-    &app.display,
-    Path::new(MODEL_PATH),
-    Path::new(SHADER_PATH),
-  )?;
+  // setup world objects
   let axis = Axis::new(&app.display)?;
-  app.world.set_teapot(teapot);
   app.world.set_axis(axis);
+  let teapot = Teapot::new_triangle_list()?.upload(&app.display);
+  app.world.set_teapot(teapot);
+
+  // initial update
   app.world.update(std::time::Duration::from_secs(0));
 
   event_loop.run(move |event, window_target| match event {

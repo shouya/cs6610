@@ -9,3 +9,4 @@ common = { path = "../common" }
 glium = { workspace = true }
 winit = { workspace = true }
 cgmath = { workspace = true }
+derive_more = "0.99.18"

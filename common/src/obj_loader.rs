@@ -6,6 +6,8 @@ struct ObjLoader;
 pub type Error = Box<dyn std::error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub type VAIdx = [usize; 3];
+
 // immutable raw obj data
 pub struct RawObj {
   pub v: Box<[[f32; 3]]>,
@@ -16,7 +18,7 @@ pub struct RawObj {
   #[allow(dead_code)]
   pub g: Box<str>,
   #[allow(dead_code)]
-  pub f: Box<[Box<[[usize; 3]]>]>,
+  pub f: Box<[Box<[VAIdx]>]>,
 }
 
 impl RawObj {
@@ -47,6 +49,16 @@ impl RawObj {
       (bbox[1].0 + bbox[1].1) / 2.0,
       (bbox[2].0 + bbox[2].1) / 2.0,
     ]
+  }
+
+  pub fn trigs(&self) -> impl Iterator<Item = [VAIdx; 3]> + '_ {
+    self.f.iter().flat_map(|face| {
+      let v0 = face[0];
+      face
+        .windows(2)
+        .skip(1)
+        .map(move |pair| [v0, pair[0], pair[1]])
+    })
   }
 }
 
