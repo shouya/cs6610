@@ -263,6 +263,12 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
+dependencies = [
+ "cgmath",
+ "glium",
+ "raw-window-handle 0.5.2",
+ "winit",
+]
 
 [[package]]
 name = "concurrent-queue"
@@ -860,7 +866,16 @@ dependencies = [
  "cgmath",
  "common",
  "glium",
- "raw-window-handle 0.5.2",
+ "winit",
+]
+
+[[package]]
+name = "project-03-shading"
+version = "0.1.0"
+dependencies = [
+ "cgmath",
+ "common",
+ "glium",
  "winit",
 ]
 
