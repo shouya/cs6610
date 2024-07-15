@@ -27,6 +27,27 @@ impl RawObj {
     let obj = loader.parse(&mut reader)?;
     Ok(obj)
   }
+
+  pub fn bounding_box(&self) -> [(f32, f32); 3] {
+    let mut min = [f32::INFINITY; 3];
+    let mut max = [f32::NEG_INFINITY; 3];
+    for v in self.v.iter() {
+      for i in 0..3 {
+        min[i] = min[i].min(v[i]);
+        max[i] = max[i].max(v[i]);
+      }
+    }
+    [(min[0], max[0]), (min[1], max[1]), (min[2], max[2])]
+  }
+
+  pub fn center(&self) -> [f32; 3] {
+    let bbox = self.bounding_box();
+    [
+      (bbox[0].0 + bbox[0].1) / 2.0,
+      (bbox[1].0 + bbox[1].1) / 2.0,
+      (bbox[2].0 + bbox[2].1) / 2.0,
+    ]
+  }
 }
 
 impl ObjLoader {

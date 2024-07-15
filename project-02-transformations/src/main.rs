@@ -22,6 +22,10 @@ use common::RawObj;
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
+const SHADER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
+const MODEL_PATH: &str =
+  concat!(env!("CARGO_MANIFEST_DIR"), "/assets/teapot.obj");
+
 #[derive(Debug)]
 enum UserSignal {
   Quit,
@@ -30,6 +34,8 @@ enum UserSignal {
 struct World {
   t: f32,
   clear_color: [f32; 4],
+  // camera
+  aspect_ratio: f32,
   camera_distance: f32,
   camera_rotation: [f32; 2],
   perspective: bool,
@@ -47,6 +53,7 @@ struct Teapot {
   rotation_speed: f32,
   model_vbo: VertexBuffer<[f32; 3]>,
   program: Program,
+  center: Vector3<f32>,
   mvp: Matrix4<f32>,
 }
 
@@ -60,6 +67,7 @@ impl World {
   fn new() -> Self {
     Self {
       t: 0.0,
+      aspect_ratio: 1.0,
       camera_distance: 2.0,
       camera_rotation: [0.0, 0.0],
       perspective: true,
@@ -98,21 +106,20 @@ impl World {
     self.rotate_teapot(dt);
   }
 
-  fn update_projection(&mut self, rect: PhysicalSize<u32>) {
-    let aspect_ratio = rect.width as f32 / rect.height as f32;
-
+  fn update_projection(&mut self) {
     // fov, aspect ratio, near, far
     self.m_proj = if self.perspective {
-      cgmath::perspective(cgmath::Deg(60.0), aspect_ratio, 0.1, 100.0)
+      cgmath::perspective(cgmath::Deg(60.0), self.aspect_ratio, 0.1, 100.0)
     } else {
-      cgmath::ortho(
-        -1.0,
-        1.0,
-        -1.0 / aspect_ratio,
-        1.0 / aspect_ratio,
-        0.1,
-        100.0,
-      )
+      cgmath::Matrix4::from_scale(1.0 / self.camera_distance)
+        * cgmath::ortho(
+          -1.0,
+          1.0,
+          -1.0 / self.aspect_ratio,
+          1.0 / self.aspect_ratio,
+          0.1,
+          100.0,
+        )
     };
 
     self.update_axis();
@@ -160,11 +167,11 @@ impl World {
     };
 
     teapot.rotation += dt.as_secs_f32() * teapot.rotation_speed;
-    let m_model = Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0))
-      * Matrix4::from_scale(0.05)
+    let m_model = Matrix4::from_scale(0.05)
       * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation))
-      // the object itself is rotated 90 to the front, let's rotate it back a little.
-      * Matrix4::from_angle_x(cgmath::Deg(-90.0));
+    // the object itself is rotated 90 to the front, let's rotate it back a little.
+      * Matrix4::from_angle_x(cgmath::Deg(-90.0))
+      * Matrix4::from_translation(-teapot.center);
     teapot.mvp = self.m_proj * self.m_view * m_model;
   }
 
@@ -176,6 +183,25 @@ impl World {
 }
 
 impl Teapot {
+  fn recompile_shader<F: Facade>(&mut self, context: &F) -> Result<()> {
+    let shaders_path = Path::new(SHADER_PATH);
+    let vert_shader_path = shaders_path.with_extension("vert");
+    let frag_shader_path = shaders_path.with_extension("frag");
+
+    self.program = Program::new(
+      context,
+      SourceCode {
+        vertex_shader: &std::fs::read_to_string(vert_shader_path)?,
+        fragment_shader: &std::fs::read_to_string(frag_shader_path)?,
+        tessellation_control_shader: None,
+        tessellation_evaluation_shader: None,
+        geometry_shader: None,
+      },
+    )?;
+
+    Ok(())
+  }
+
   fn load_file<F: Facade>(
     context: &F,
     model_path: &Path,
@@ -206,6 +232,7 @@ impl Teapot {
       VertexBuffer::new_raw(context, &model.v, VF_F32x3, size_of::<[f32; 3]>())?
     };
     let mvp = Matrix4::<f32>::identity();
+    let center = Vector3::from(model.center());
 
     Ok(Self {
       rotation: 0.0,
@@ -213,6 +240,7 @@ impl Teapot {
       model_vbo,
       mvp,
       program,
+      center,
     })
   }
 
@@ -425,7 +453,8 @@ impl App {
 
   fn handle_resize(&mut self, size: PhysicalSize<u32>) {
     println!("Resized to {:?}", size);
-    self.world.update_projection(size);
+    self.world.aspect_ratio = size.width as f32 / size.height as f32;
+    self.world.update_projection();
     self.world.update_view();
 
     self.window.request_redraw();
@@ -444,11 +473,20 @@ impl App {
       self.event_loop.send_event(UserSignal::Quit).unwrap();
     } else if event.logical_key.to_text() == Some("p") {
       self.world.perspective = !self.world.perspective;
-      self.world.update_projection(self.window.inner_size());
+      self.world.update_projection();
       self.window.request_redraw();
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
+    } else if event.logical_key == NamedKey::F6 {
+      if let Some(teapot) = self.world.teapot.as_mut() {
+        if let Err(e) = teapot.recompile_shader(&self.display) {
+          eprintln!("Failed to recompile shader: {}", e);
+        } else {
+          println!("Recompiled shader");
+          self.window.request_redraw();
+        }
+      }
     }
   }
 
@@ -526,6 +564,7 @@ impl App {
 
       self.world.camera_distance += dy * 0.01;
       self.world.camera_distance = self.world.camera_distance.clamp(0.1, 10.0);
+      self.world.update_projection();
       self.world.update_view();
     }
 
@@ -546,6 +585,7 @@ impl App {
 
     self.world.camera_distance -= d * 0.01;
     self.world.camera_distance = self.world.camera_distance.clamp(0.1, 10.0);
+    self.world.update_projection();
     self.world.update_view();
   }
 }
@@ -562,13 +602,10 @@ fn main() -> Result<()> {
 
   let teapot = Teapot::load_file(
     &app.display,
-    Path::new("project-02-transformations/assets/teapot.obj"),
-    Path::new("project-02-transformations/assets/shader"),
+    Path::new(MODEL_PATH),
+    Path::new(SHADER_PATH),
   )?;
-  let axis = Axis::load_file(
-    &app.display,
-    Path::new("project-02-transformations/assets/shader"),
-  )?;
+  let axis = Axis::load_file(&app.display, Path::new(SHADER_PATH))?;
   app.world.set_teapot(teapot);
   app.world.set_axis(axis);
   app.world.update(std::time::Duration::from_secs(0));
