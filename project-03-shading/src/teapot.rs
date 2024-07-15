@@ -1,14 +1,41 @@
 use std::path::Path;
 use std::time::Duration;
 
+use derive_more::From;
+
 use cgmath::Matrix4;
 use common::RawObj;
 use glium::{backend::Facade, uniform, DrawParameters, Frame};
 
+use crate::mesh::TriangleIndex;
+use crate::mesh::TriangleIndexGPU;
+use crate::mesh::TriangleListGPU;
 use crate::Camera;
 use crate::Result;
 
 use crate::mesh::{self, TriangleList};
+
+#[derive(From)]
+pub enum TeapotKind {
+  TrigList(Teapot<TriangleListGPU>),
+  TrigIndex(Teapot<TriangleIndexGPU>),
+}
+
+impl TeapotKind {
+  pub fn update(&mut self, dt: Duration) {
+    match self {
+      Self::TrigList(teapot) => teapot.update(dt),
+      Self::TrigIndex(teapot) => teapot.update(dt),
+    }
+  }
+
+  pub fn draw(&self, frame: &mut Frame, camera: &Camera) -> Result<()> {
+    match self {
+      Self::TrigList(teapot) => teapot.draw(frame, camera),
+      Self::TrigIndex(teapot) => teapot.draw(frame, camera),
+    }
+  }
+}
 
 pub struct Teapot<Mesh> {
   rotation: f32,
@@ -21,6 +48,15 @@ impl Teapot<TriangleList> {
     let path = Path::new(common::teapot_path());
     let raw_obj = RawObj::load_from(path)?;
     let mesh = TriangleList::from_raw_obj(raw_obj);
+    Self::new(mesh)
+  }
+}
+
+impl Teapot<TriangleIndex> {
+  pub fn new_triangle_index() -> Result<Self> {
+    let path = Path::new(common::teapot_path());
+    let raw_obj = RawObj::load_from(path)?;
+    let mesh = TriangleIndex::from_raw_obj(raw_obj);
     Self::new(mesh)
   }
 }

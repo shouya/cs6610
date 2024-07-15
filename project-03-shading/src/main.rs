@@ -1,13 +1,11 @@
 mod mesh;
 mod teapot;
 
-use derive_more::From;
 use std::{fmt::Debug, time::Duration};
 
-use glium::{glutin::surface::WindowSurface, Display, Frame, Surface};
+use glium::{glutin::surface::WindowSurface, Display, Surface};
 
-use mesh::TriangleListGPU;
-use teapot::Teapot;
+use teapot::{Teapot, TeapotKind};
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -28,31 +26,12 @@ enum UserSignal {
   Quit,
 }
 
-#[derive(From)]
-enum TeapotKind {
-  TrigList(Teapot<TriangleListGPU>),
-}
-
 struct World {
   t: f32,
   camera: Camera,
   show_axis: bool,
   axis: Option<Axis>,
   teapot: Option<TeapotKind>,
-}
-
-impl TeapotKind {
-  fn update(&mut self, dt: Duration) {
-    match self {
-      Self::TrigList(teapot) => teapot.update(dt),
-    }
-  }
-
-  fn draw(&self, frame: &mut Frame, camera: &Camera) -> Result<()> {
-    match self {
-      Self::TrigList(teapot) => teapot.draw(frame, camera),
-    }
-  }
 }
 
 struct Camera {
@@ -419,8 +398,9 @@ fn main() -> Result<()> {
   // setup world objects
   let axis = Axis::new(&app.display)?;
   app.world.set_axis(axis);
-  let teapot = Teapot::new_triangle_list()?.upload(&app.display);
-  app.world.set_teapot(teapot);
+  let teapot1 = Teapot::new_triangle_list()?.upload(&app.display);
+  let _teapot2 = Teapot::new_triangle_index()?.upload(&app.display);
+  app.world.set_teapot(teapot1);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));
