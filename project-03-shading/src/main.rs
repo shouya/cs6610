@@ -31,7 +31,8 @@ struct World {
   camera: Camera,
   show_axis: bool,
   axis: Option<Axis>,
-  teapot: Option<TeapotKind>,
+  teapots: Vec<TeapotKind>,
+  teapot_idx: usize,
 }
 
 struct Camera {
@@ -111,12 +112,13 @@ impl World {
       camera: Camera::new(),
       axis: None,
       show_axis: true,
-      teapot: None,
+      teapots: vec![],
+      teapot_idx: 0,
     }
   }
 
-  fn set_teapot<T: Into<TeapotKind>>(&mut self, teapot: T) {
-    self.teapot = Some(teapot.into());
+  fn add_teapot_alternative<T: Into<TeapotKind>>(&mut self, teapot: T) {
+    self.teapots.push(teapot.into());
   }
 
   fn set_axis(&mut self, axis: Axis) {
@@ -129,7 +131,7 @@ impl World {
 
   fn update(&mut self, dt: Duration) {
     // self.update_bg_color(dt);
-    if let Some(teapot) = self.teapot.as_mut() {
+    for teapot in &mut self.teapots {
       teapot.update(dt);
     }
   }
@@ -142,10 +144,9 @@ impl World {
     let mut frame = context.draw();
     frame.clear_color_and_depth(self.camera.clear_color.into(), 1.0);
 
-    if let Some(teapot) = self.teapot.as_ref() {
-      if let Err(e) = teapot.draw(&mut frame, &self.camera) {
-        eprintln!("Failed to draw teapot: {}", e);
-      }
+    let teapot = &self.teapots[self.teapot_idx];
+    if let Err(e) = teapot.draw(&mut frame, &self.camera) {
+      eprintln!("Failed to draw teapot: {}", e);
     }
 
     if let Some(axis) = self.axis.as_ref() {
@@ -283,6 +284,10 @@ impl App {
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
+    } else if event.logical_key.to_text() == Some("t") {
+      self.world.teapot_idx =
+        (self.world.teapot_idx + 1) % self.world.teapots.len();
+      self.window.request_redraw();
     }
   }
 
@@ -399,8 +404,13 @@ fn main() -> Result<()> {
   let axis = Axis::new(&app.display)?;
   app.world.set_axis(axis);
   let teapot1 = Teapot::new_triangle_list()?.upload(&app.display);
-  let _teapot2 = Teapot::new_triangle_index()?.upload(&app.display);
-  app.world.set_teapot(teapot1);
+  app.world.add_teapot_alternative(teapot1);
+  let teapot2 = Teapot::new_triangle_index()?;
+  let teapot3 = teapot2.to_strips();
+  let teapot2 = teapot2.upload(&app.display);
+  app.world.add_teapot_alternative(teapot2);
+  let teapot3 = teapot3?.upload(&app.display);
+  app.world.add_teapot_alternative(teapot3);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

@@ -10,6 +10,8 @@ use glium::{backend::Facade, uniform, DrawParameters, Frame};
 use crate::mesh::TriangleIndex;
 use crate::mesh::TriangleIndexGPU;
 use crate::mesh::TriangleListGPU;
+use crate::mesh::TriangleStrip;
+use crate::mesh::TriangleStripGPU;
 use crate::Camera;
 use crate::Result;
 
@@ -19,6 +21,7 @@ use crate::mesh::{self, TriangleList};
 pub enum TeapotKind {
   TrigList(Teapot<TriangleListGPU>),
   TrigIndex(Teapot<TriangleIndexGPU>),
+  TriangleStrip(Teapot<TriangleStripGPU>),
 }
 
 impl TeapotKind {
@@ -26,6 +29,7 @@ impl TeapotKind {
     match self {
       Self::TrigList(teapot) => teapot.update(dt),
       Self::TrigIndex(teapot) => teapot.update(dt),
+      Self::TriangleStrip(teapot) => teapot.update(dt),
     }
   }
 
@@ -33,6 +37,7 @@ impl TeapotKind {
     match self {
       Self::TrigList(teapot) => teapot.draw(frame, camera),
       Self::TrigIndex(teapot) => teapot.draw(frame, camera),
+      Self::TriangleStrip(teapot) => teapot.draw(frame, camera),
     }
   }
 }
@@ -59,6 +64,15 @@ impl Teapot<TriangleIndex> {
     let mesh = TriangleIndex::from_raw_obj(raw_obj);
     Self::new(mesh)
   }
+
+  pub fn to_strips(&self) -> Result<Teapot<TriangleStrip>> {
+    let mesh = TriangleStrip::from(&self.mesh);
+    Ok(Teapot {
+      rotation: self.rotation,
+      rotation_speed: self.rotation_speed,
+      mesh,
+    })
+  }
 }
 
 impl<Mesh> Teapot<Mesh> {
@@ -71,7 +85,7 @@ impl<Mesh> Teapot<Mesh> {
   }
 
   pub fn update(&mut self, dt: Duration) {
-    self.rotation += dt.as_secs_f32() * self.rotation_speed;
+    // self.rotation += dt.as_secs_f32() * self.rotation_speed;
   }
 
   fn model_transform(&self) -> Matrix4<f32> {
