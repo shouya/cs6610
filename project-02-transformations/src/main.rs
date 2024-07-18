@@ -23,7 +23,6 @@ type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
 const SHADER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
-const MODEL_PATH: &str = "assets/teapot.obj";
 
 #[derive(Debug)]
 enum UserSignal {
@@ -601,7 +600,7 @@ fn main() -> Result<()> {
 
   let teapot = Teapot::load_file(
     &app.display,
-    Path::new(MODEL_PATH),
+    Path::new(common::teapot_path()),
     Path::new(SHADER_PATH),
   )?;
   let axis = Axis::load_file(&app.display, Path::new(SHADER_PATH))?;

@@ -1,6 +1,10 @@
 use std::path::Path;
 use std::time::Duration;
 
+use cgmath::Matrix as _;
+use cgmath::Matrix3;
+use cgmath::Point3;
+use cgmath::Transform;
 use derive_more::From;
 
 use cgmath::Matrix4;
@@ -85,7 +89,7 @@ impl<Mesh> Teapot<Mesh> {
   }
 
   pub fn update(&mut self, dt: Duration) {
-    // self.rotation += dt.as_secs_f32() * self.rotation_speed;
+    self.rotation += dt.as_secs_f32() * self.rotation_speed;
   }
 
   fn model_transform(&self) -> Matrix4<f32> {
@@ -110,15 +114,32 @@ impl<Mesh> Teapot<Mesh> {
   where
     Mesh: mesh::GPUMeshFormat,
   {
-    let vp = camera.vp();
-    let mvp: [[f32; 4]; 4] = (vp * self.model_transform()).into();
+    let mv: Matrix4<f32> = camera.view() * self.model_transform();
+    let mv3: Matrix3<f32> = Matrix3 {
+      x: mv.x.truncate(),
+      y: mv.y.truncate(),
+      z: mv.z.truncate(),
+    };
+    let mv_n: Matrix3<f32> =
+      <Matrix3<f32> as Transform<Point3<f32>>>::inverse_transform(&mv3)
+        .unwrap()
+        .transpose();
+    let mvp: Matrix4<f32> = camera.projection() * mv;
+
     let uniforms = uniform! {
-      mvp: mvp,
+      mvp: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mvp),
+      mv: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mv),
+      mv_n: <Matrix3<f32> as Into<[[f32; 3]; 3]>>::into(mv_n),
       clr: [1.0, 0.0, 1.0f32],
     };
 
+    // by default the depth buffer is not used.
     let draw_params = DrawParameters {
-      point_size: Some(2.0),
+      depth: glium::Depth {
+        test: glium::draw_parameters::DepthTest::IfLess,
+        write: true,
+        ..Default::default()
+      },
       ..Default::default()
     };
 

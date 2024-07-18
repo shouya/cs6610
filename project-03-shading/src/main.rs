@@ -45,7 +45,7 @@ struct Camera {
   // cached matrices
   m_view: Matrix4<f32>,
   m_proj: Matrix4<f32>,
-  m_vp: Matrix4<f32>,
+  m_view_proj: Matrix4<f32>,
 }
 
 impl Camera {
@@ -59,7 +59,7 @@ impl Camera {
 
       m_view: Matrix4::identity(),
       m_proj: Matrix4::identity(),
-      m_vp: Matrix4::identity(),
+      m_view_proj: Matrix4::identity(),
     }
   }
 
@@ -67,15 +67,23 @@ impl Camera {
     self.aspect_ratio = new_size.0 as f32 / new_size.1 as f32;
   }
 
-  fn vp(&self) -> Matrix4<f32> {
-    self.m_vp
+  fn view(&self) -> Matrix4<f32> {
+    self.m_view
+  }
+
+  fn view_projection(&self) -> Matrix4<f32> {
+    self.m_view_proj
+  }
+
+  fn projection(&self) -> Matrix4<f32> {
+    self.m_proj
   }
 
   fn calc_view(&self) -> Matrix4<f32> {
     // default view matrix: eye at (0, 0, 2), looking at (0, 0, -1), up (0, 1, 0)
     let dir = Matrix3::from_angle_y(Deg(self.rotation[0]))
       * Matrix3::from_angle_x(-Deg(self.rotation[1]))
-      * Vector3::new(0.0, 0.0, -1.0);
+      * Vector3::new(0.0, 0.0, 1.0);
     let eye = Point3::new(0.0, 0.0, 0.0) + -dir * self.distance;
     let up = Vector3::new(0.0, 1.0, 0.0);
     let origin = Point3::new(0.0, 0.0, 0.0);
@@ -101,7 +109,7 @@ impl Camera {
   fn update_view(&mut self) {
     self.m_view = self.calc_view();
     self.m_proj = self.calc_proj();
-    self.m_vp = self.m_proj * self.m_view;
+    self.m_view_proj = self.m_proj * self.m_view;
   }
 }
 
@@ -151,7 +159,7 @@ impl World {
 
     if let Some(axis) = self.axis.as_ref() {
       if self.show_axis {
-        if let Err(e) = axis.draw(&mut frame, &self.camera.vp()) {
+        if let Err(e) = axis.draw(&mut frame, &self.camera.view_projection()) {
           eprintln!("Failed to draw axis: {}", e);
         }
       }
