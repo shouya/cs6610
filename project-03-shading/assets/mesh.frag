@@ -25,6 +25,7 @@ uniform float light_cone;
 // 5. specular (blinn)
 // 6. full blinn shading
 // 8. full phong shading
+// 9. plain color (k_d)
 uniform int mode;
 
 void main() {
@@ -83,6 +84,11 @@ void main() {
 
   if (mode == 8) {
     color = vec4(light_color * (geom * k_d + spec2 * k_s) + k_a, 1.0);
+    return;
+  }
+
+  if (mode == 9) {
+    color = vec4(k_d, 1.0);
     return;
   }
 }

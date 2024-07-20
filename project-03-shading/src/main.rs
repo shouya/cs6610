@@ -1,3 +1,4 @@
+mod light;
 mod mesh;
 mod teapot;
 
@@ -10,13 +11,14 @@ use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
   event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-  keyboard::{Key, NamedKey},
+  keyboard::{Key, ModifiersState, NamedKey},
   window::{Window, WindowId},
 };
 
 use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
 
 use common::Axis;
+use light::Light;
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -47,15 +49,6 @@ struct Camera {
   m_view: Matrix4<f32>,
   m_proj: Matrix4<f32>,
   m_view_proj: Matrix4<f32>,
-}
-
-struct Light {
-  // note the light's color can exceed 1.0
-  color: [f32; 3],
-  // in world space
-  position: [f32; 3],
-  // in radians
-  cone_angle: f32,
 }
 
 impl Camera {
@@ -132,11 +125,7 @@ impl World {
       show_axis: true,
       teapots: vec![],
       teapot_idx: 0,
-      light: Light {
-        color: [1.0, 1.0, 1.0],
-        position: [2.0, 5.0, 1.0],
-        cone_angle: 300.0_f32.to_radians(),
-      },
+      light: Light::new(),
     }
   }
 
@@ -180,6 +169,8 @@ impl World {
       }
     }
 
+    self.light.draw(&mut frame, &self.camera)?;
+
     frame.finish()?;
     Ok(())
   }
@@ -208,6 +199,7 @@ struct App {
   mouse_down: (bool, bool),
   last_pos: [f32; 2],
   mouse_pos: [f32; 2],
+  modifiers: ModifiersState,
 
   world: World,
 }
@@ -234,6 +226,7 @@ impl App {
       last_pos: [0.0, 0.0],
       mouse_pos: [0.0, 0.0],
       mouse_down: (false, false),
+      modifiers: ModifiersState::empty(),
       world,
     })
   }
@@ -274,6 +267,9 @@ impl App {
         position,
       } => {
         self.handle_cursor_moved(device_id, position);
+      }
+      WindowEvent::ModifiersChanged(new_modifiers) => {
+        self.modifiers = new_modifiers.state();
       }
       _ => {}
     }
@@ -379,12 +375,20 @@ impl App {
     self.mouse_pos = [position.x as f32, position.y as f32];
 
     // left drag: rotate camera
-    if self.mouse_down.0 {
+    if self.mouse_down.0 && !self.modifiers.control_key() {
       let dx = self.mouse_pos[0] - self.last_pos[0];
       let dy = self.mouse_pos[1] - self.last_pos[1];
       self.world.camera.rotation[0] += dx * 0.1;
       self.world.camera.rotation[1] += dy * 0.1;
       self.world.update_view();
+      self.window.request_redraw();
+    }
+
+    // ctrl + left drag: rotate light
+    if self.mouse_down.0 && self.modifiers.control_key() {
+      let dx = self.mouse_pos[0] - self.last_pos[0];
+      let _dy = self.mouse_pos[1] - self.last_pos[1];
+      self.world.light.add_rotation(dx * 0.01);
       self.window.request_redraw();
     }
 
@@ -439,6 +443,8 @@ fn main() -> Result<()> {
   app.world.add_teapot_alternative(teapot2);
   let teapot3 = teapot3?.upload(&app.display);
   app.world.add_teapot_alternative(teapot3);
+
+  app.world.light.upload(&app.display)?;
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

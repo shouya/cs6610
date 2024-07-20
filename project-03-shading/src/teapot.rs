@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::time::Duration;
 
 use cgmath::Matrix as _;
@@ -100,8 +99,7 @@ pub struct Teapot<Mesh> {
 
 impl Teapot<TriangleList> {
   pub fn new_triangle_list() -> Result<Self> {
-    let path = Path::new(common::teapot_path());
-    let raw_obj = RawObj::load_from(path)?;
+    let raw_obj = RawObj::load_from(common::teapot_path())?;
     let mesh = TriangleList::from_raw_obj(raw_obj);
     Self::new(mesh)
   }
@@ -109,8 +107,7 @@ impl Teapot<TriangleList> {
 
 impl Teapot<TriangleIndex> {
   pub fn new_triangle_index() -> Result<Self> {
-    let path = Path::new(common::teapot_path());
-    let raw_obj = RawObj::load_from(path)?;
+    let raw_obj = RawObj::load_from(common::teapot_path())?;
     let mesh = TriangleIndex::from_raw_obj(raw_obj);
     Self::new(mesh)
   }
@@ -186,8 +183,10 @@ impl<Mesh> Teapot<Mesh> {
     let mvp: Matrix4<f32> = camera.projection() * mv;
 
     // in view space
-    let light_pos: [f32; 3] =
-      camera.view().transform_point(light.position.into()).into();
+    let light_pos: [f32; 3] = camera
+      .view()
+      .transform_point(light.position_world().into())
+      .into();
 
     let uniforms = uniform! {
       mvp: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mvp),
@@ -198,8 +197,7 @@ impl<Mesh> Teapot<Mesh> {
       k_d: [1.0, 0.0, 0.0f32],
       k_s: [1.0, 1.0, 1.0f32],
       light_pos: light_pos,
-      light_color: light.color,
-      light_cone: light.cone_angle,
+      light_color: light.color(),
       shininess: 100.0f32,
     };
 

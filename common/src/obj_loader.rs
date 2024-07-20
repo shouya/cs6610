@@ -22,7 +22,7 @@ pub struct RawObj {
 }
 
 impl RawObj {
-  pub fn load_from(path: &Path) -> Result<Self> {
+  pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
     let loader = ObjLoader;
@@ -71,6 +71,14 @@ impl ObjLoader {
     Ok([x, y, z])
   }
 
+  fn parse_v2_opt(&self, line: &str) -> Result<[f32; 3]> {
+    let mut parts = line.split_whitespace();
+    let x = parts.next().ok_or("missing x")?.parse()?;
+    let y = parts.next().ok_or("missing y")?.parse()?;
+    let z = parts.next().unwrap_or("0.0").parse()?;
+    Ok([x, y, z])
+  }
+
   fn parse_vn(&self, line: &str) -> Result<[f32; 3]> {
     // just a shortcut for now
     self.parse_v(line)
@@ -78,7 +86,7 @@ impl ObjLoader {
 
   fn parse_vt(&self, line: &str) -> Result<[f32; 3]> {
     // just a shortcut for now
-    self.parse_v(line)
+    self.parse_v2_opt(line)
   }
 
   fn parse_g(&self, line: &str) -> Result<String> {
