@@ -600,7 +600,7 @@ fn main() -> Result<()> {
 
   let teapot = Teapot::load_file(
     &app.display,
-    Path::new(common::teapot_path()),
+    &common::teapot_path(),
     Path::new(SHADER_PATH),
   )?;
   let axis = Axis::load_file(&app.display, Path::new(SHADER_PATH))?;

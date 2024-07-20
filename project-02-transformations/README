@@ -1,0 +1,17 @@
+My implementation for the second project. Shows a dot matrix view of the vertices on the teapot.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=2
+
+All CS6610 and optional requirements implemented.
+
+--------
+
+Controls:
+
+left drag: rotate camera
+right drag/wheel: change camera distance
+
+p: perspective/orthographic projection
+a: show/hide axis
+f6: recompile shader
+esc: quit

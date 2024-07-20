@@ -33,6 +33,7 @@ pub enum RenderMode {
   FullBlinn = 6,
   SpecularPhong = 7,
   FullPhong = 8,
+  Plain = 9,
 }
 
 impl RenderMode {
@@ -47,6 +48,7 @@ impl RenderMode {
       "6" => Some(Self::FullBlinn),
       "7" => Some(Self::SpecularPhong),
       "8" => Some(Self::FullPhong),
+      "9" => Some(Self::Plain),
       _ => None,
     }
   }

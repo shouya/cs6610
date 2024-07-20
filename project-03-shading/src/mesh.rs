@@ -284,19 +284,20 @@ impl GPUMeshFormat for TriangleStripGPU {
     uniforms: &impl Uniforms,
     params: &DrawParameters<'_>,
   ) {
-    if std::env::var("DEBUG_TRIANGLE_STRIP").as_deref() == Ok("1") {
-      let mut new_uniforms = OverridingUniforms::from(uniforms);
-
-      for (range, color) in &self.ranges {
-        new_uniforms.set("clr", color);
-        let ibo = self.ibo.slice(range.clone()).unwrap();
-        frame
-          .draw(&self.vbo, &ibo, &self.program, &new_uniforms, params)
-          .expect("Failed to draw");
-      }
-    } else {
+    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() == Ok("1") {
       frame
         .draw(&self.vbo, &self.ibo, &self.program, uniforms, params)
+        .expect("Failed to draw");
+      return;
+    }
+
+    let mut new_uniforms = OverridingUniforms::from(uniforms);
+
+    for (range, color) in &self.ranges {
+      new_uniforms.set("k_d", color);
+      let ibo = self.ibo.slice(range.clone()).unwrap();
+      frame
+        .draw(&self.vbo, &ibo, &self.program, &new_uniforms, params)
         .expect("Failed to draw");
     }
   }

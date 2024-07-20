@@ -1,0 +1,11 @@
+My implementation for the first project. Creates window, opengl context, and a canvas varying in background colors.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=1
+
+CS6610 requirement implemented.
+
+----
+
+Controls:
+
+esc: quit
