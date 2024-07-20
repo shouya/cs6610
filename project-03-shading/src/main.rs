@@ -10,7 +10,7 @@ use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
   event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-  keyboard::NamedKey,
+  keyboard::{Key, NamedKey},
   window::{Window, WindowId},
 };
 
@@ -33,6 +33,7 @@ struct World {
   axis: Option<Axis>,
   teapots: Vec<TeapotKind>,
   teapot_idx: usize,
+  light: Light,
 }
 
 struct Camera {
@@ -46,6 +47,15 @@ struct Camera {
   m_view: Matrix4<f32>,
   m_proj: Matrix4<f32>,
   m_view_proj: Matrix4<f32>,
+}
+
+struct Light {
+  // note the light's color can exceed 1.0
+  color: [f32; 3],
+  // in world space
+  position: [f32; 3],
+  // in radians
+  cone_angle: f32,
 }
 
 impl Camera {
@@ -122,6 +132,11 @@ impl World {
       show_axis: true,
       teapots: vec![],
       teapot_idx: 0,
+      light: Light {
+        color: [1.0, 1.0, 1.0],
+        position: [2.0, 5.0, 1.0],
+        cone_angle: 300.0_f32.to_radians(),
+      },
     }
   }
 
@@ -153,7 +168,7 @@ impl World {
     frame.clear_color_and_depth(self.camera.clear_color.into(), 1.0);
 
     let teapot = &self.teapots[self.teapot_idx];
-    if let Err(e) = teapot.draw(&mut frame, &self.camera) {
+    if let Err(e) = teapot.draw(&mut frame, &self.camera, &self.light) {
       eprintln!("Failed to draw teapot: {}", e);
     }
 
@@ -296,6 +311,11 @@ impl App {
       self.world.teapot_idx =
         (self.world.teapot_idx + 1) % self.world.teapots.len();
       self.window.request_redraw();
+    } else if let Key::Character(ch) = event.logical_key {
+      if let Some(mode) = teapot::RenderMode::from_key(ch) {
+        self.world.teapots[self.world.teapot_idx].set_render_mode(mode);
+        self.window.request_redraw();
+      }
     }
   }
 
