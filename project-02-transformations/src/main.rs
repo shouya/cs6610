@@ -17,7 +17,7 @@ use winit::{
 
 use cgmath::{Deg, Euler, Matrix3, Matrix4, Point3, SquareMatrix, Vector3};
 
-use common::RawObj;
+use common::SimpleObj;
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -205,7 +205,7 @@ impl Teapot {
     model_path: &Path,
     shaders_path: &Path,
   ) -> Result<Self> {
-    let model = RawObj::load_from(model_path)?;
+    let model = SimpleObj::load_from(model_path)?;
     let vert_shader_path = shaders_path.with_extension("vert");
     let frag_shader_path = shaders_path.with_extension("frag");
 
@@ -222,7 +222,7 @@ impl Teapot {
 
   fn new<F: Facade>(
     context: &F,
-    model: &RawObj,
+    model: &SimpleObj,
     program: Program,
   ) -> Result<Self> {
     eprintln!("Loaded model with {} vertices", model.v.len());

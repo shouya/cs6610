@@ -8,3 +8,4 @@ glium = { workspace = true }
 winit = { workspace = true }
 cgmath = { workspace = true }
 raw-window-handle = { workspace = true }
+image = { workspace = true }

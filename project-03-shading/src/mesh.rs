@@ -4,7 +4,7 @@ use std::{
   ops::Range,
 };
 
-use common::RawObj;
+use common::SimpleObj;
 use glium::{
   implement_vertex, index::PrimitiveType, uniforms::Uniforms, DrawParameters,
   IndexBuffer, Program, VertexBuffer,
@@ -56,15 +56,15 @@ pub struct TriangleList {
 }
 
 impl TriangleList {
-  pub fn from_raw_obj(raw_obj: RawObj) -> Self {
+  pub fn from_simple_obj(simple_obj: SimpleObj) -> Self {
     let mut trigs = Vec::new();
     let to_vert_attr = |[v, vt, vn]: [usize; 3]| Vertex {
-      pos: raw_obj.v[v - 1],
-      uv: [raw_obj.vt[vt - 1][0], raw_obj.vt[vt - 1][1]],
-      n: raw_obj.vn[vn - 1],
+      pos: simple_obj.v[v - 1],
+      uv: [simple_obj.vt[vt - 1][0], simple_obj.vt[vt - 1][1]],
+      n: simple_obj.vn[vn - 1],
     };
 
-    for trig in raw_obj.trigs() {
+    for trig in simple_obj.trigs() {
       let [a, b, c] = trig;
       trigs.push(to_vert_attr(a));
       trigs.push(to_vert_attr(b));
@@ -122,7 +122,7 @@ pub struct TriangleIndex {
 }
 
 impl TriangleIndex {
-  pub fn from_raw_obj(raw_obj: RawObj) -> Self {
+  pub fn from_simple_obj(simple_obj: SimpleObj) -> Self {
     // we cannot store vertex because f32 is not Eq. Here we are
     // assuming the hash function is one-to-one for all values we have.
     let mut vert_index: HashMap<u64, usize> = Default::default();
@@ -130,12 +130,12 @@ impl TriangleIndex {
     let mut indices = Vec::new();
 
     let to_vert_attr = |[v, vt, vn]: [usize; 3]| Vertex {
-      pos: raw_obj.v[v - 1],
-      uv: [raw_obj.vt[vt - 1][0], raw_obj.vt[vt - 1][1]],
-      n: raw_obj.vn[vn - 1],
+      pos: simple_obj.v[v - 1],
+      uv: [simple_obj.vt[vt - 1][0], simple_obj.vt[vt - 1][1]],
+      n: simple_obj.vn[vn - 1],
     };
 
-    for trig in raw_obj.trigs() {
+    for trig in simple_obj.trigs() {
       for v in trig {
         let va = to_vert_attr(v);
         let hash = {

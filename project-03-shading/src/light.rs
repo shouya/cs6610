@@ -1,5 +1,5 @@
 use cgmath::{Matrix as _, Matrix3, Matrix4, Point3, Rad, Transform};
-use common::RawObj;
+use common::SimpleObj;
 use glium::{backend::Facade, uniform, DrawParameters};
 
 use crate::{
@@ -103,8 +103,8 @@ impl Light {
   }
 
   pub fn upload(&mut self, surface: &impl Facade) -> Result<()> {
-    let obj = RawObj::load_from(common::sphere_path())?;
-    let mesh = TriangleIndex::from_raw_obj(obj).upload(surface);
+    let obj = SimpleObj::load_from(common::sphere_path())?;
+    let mesh = TriangleIndex::from_simple_obj(obj).upload(surface);
     let gpu = GPULight { mesh };
     self.gpu = Some(gpu);
     Ok(())

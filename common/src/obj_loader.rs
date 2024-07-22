@@ -1,5 +1,7 @@
 use std::{io::BufRead, path::Path};
 
+use image::RgbImage;
+
 #[derive(Default)]
 struct ObjLoader;
 
@@ -8,8 +10,27 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 pub type VAIdx = [usize; 3];
 
+#[allow(dead_code, non_snake_case)]
+struct RawMtl {
+  pub name: String,
+  pub Ns: f32,
+  pub Ni: f32,
+  pub d: f32,
+  pub Tr: f32,
+  pub Tf: [f32; 3],
+  pub illum: u32,
+  pub Ka: [f32; 3],
+  pub Kd: [f32; 3],
+  pub Ks: [f32; 3],
+  pub Ke: [f32; 3],
+  pub map_Ka: Option<RgbImage>,
+  pub map_Kd: Option<RgbImage>,
+  pub map_bump: Option<RgbImage>,
+  pub bump: Option<RgbImage>,
+}
+
 // immutable raw obj data
-pub struct RawObj {
+pub struct SimpleObj {
   pub v: Box<[[f32; 3]]>,
   #[allow(dead_code)]
   pub vn: Box<[[f32; 3]]>,
@@ -21,7 +42,7 @@ pub struct RawObj {
   pub f: Box<[Box<[VAIdx]>]>,
 }
 
-impl RawObj {
+impl SimpleObj {
   pub fn load_from<P: AsRef<Path>>(path: P) -> Result<Self> {
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
@@ -110,7 +131,7 @@ impl ObjLoader {
     Ok(vec.into_boxed_slice())
   }
 
-  fn parse<R: BufRead>(&self, input: &mut R) -> Result<RawObj> {
+  fn parse<R: BufRead>(&self, input: &mut R) -> Result<SimpleObj> {
     let mut v = Vec::new();
     let mut vn = Vec::new();
     let mut vt = Vec::new();
@@ -136,7 +157,7 @@ impl ObjLoader {
       }
     }
 
-    Ok(RawObj {
+    Ok(SimpleObj {
       v: v.into_boxed_slice(),
       vn: vn.into_boxed_slice(),
       vt: vt.into_boxed_slice(),

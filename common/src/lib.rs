@@ -5,7 +5,7 @@ pub mod obj_loader;
 use std::path::PathBuf;
 
 pub use axis::Axis;
-pub use obj_loader::RawObj;
+pub use obj_loader::SimpleObj;
 
 pub fn teapot_path() -> PathBuf {
   asset_path("teapot.obj")

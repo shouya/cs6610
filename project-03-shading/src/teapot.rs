@@ -7,7 +7,7 @@ use cgmath::Transform;
 use derive_more::From;
 
 use cgmath::Matrix4;
-use common::RawObj;
+use common::SimpleObj;
 use glium::{backend::Facade, uniform, DrawParameters, Frame};
 
 use crate::mesh::TriangleIndex;
@@ -101,16 +101,16 @@ pub struct Teapot<Mesh> {
 
 impl Teapot<TriangleList> {
   pub fn new_triangle_list() -> Result<Self> {
-    let raw_obj = RawObj::load_from(common::teapot_path())?;
-    let mesh = TriangleList::from_raw_obj(raw_obj);
+    let simple_obj = SimpleObj::load_from(common::teapot_path())?;
+    let mesh = TriangleList::from_simple_obj(simple_obj);
     Self::new(mesh)
   }
 }
 
 impl Teapot<TriangleIndex> {
   pub fn new_triangle_index() -> Result<Self> {
-    let raw_obj = RawObj::load_from(common::teapot_path())?;
-    let mesh = TriangleIndex::from_raw_obj(raw_obj);
+    let simple_obj = SimpleObj::load_from(common::teapot_path())?;
+    let mesh = TriangleIndex::from_simple_obj(simple_obj);
     Self::new(mesh)
   }
 
