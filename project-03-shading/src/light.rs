@@ -103,7 +103,7 @@ impl Light {
   }
 
   pub fn upload(&mut self, surface: &impl Facade) -> Result<()> {
-    let obj = SimpleObj::load_from(common::sphere_path())?;
+    let obj = SimpleObj::load_from(&common::sphere_path())?;
     let mesh = TriangleIndex::from_simple_obj(obj).upload(surface);
     let gpu = GPULight { mesh };
     self.gpu = Some(gpu);

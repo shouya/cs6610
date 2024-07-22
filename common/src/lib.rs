@@ -1,5 +1,6 @@
 pub mod axis;
 pub mod gl_boilerplate;
+pub mod mesh;
 pub mod obj_loader;
 
 use std::path::PathBuf;

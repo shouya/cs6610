@@ -1,5 +1,3 @@
-mod obj_loader;
-
 use std::{fmt::Debug, mem::size_of, path::Path, time::Duration};
 
 use glium::{
@@ -205,7 +203,7 @@ impl Teapot {
     model_path: &Path,
     shaders_path: &Path,
   ) -> Result<Self> {
-    let model = SimpleObj::load_from(model_path)?;
+    let model = SimpleObj::load_from(&model_path)?;
     let vert_shader_path = shaders_path.with_extension("vert");
     let frag_shader_path = shaders_path.with_extension("frag");
 

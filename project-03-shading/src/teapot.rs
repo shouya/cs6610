@@ -101,7 +101,7 @@ pub struct Teapot<Mesh> {
 
 impl Teapot<TriangleList> {
   pub fn new_triangle_list() -> Result<Self> {
-    let simple_obj = SimpleObj::load_from(common::teapot_path())?;
+    let simple_obj = SimpleObj::load_from(&common::teapot_path())?;
     let mesh = TriangleList::from_simple_obj(simple_obj);
     Self::new(mesh)
   }
@@ -109,7 +109,7 @@ impl Teapot<TriangleList> {
 
 impl Teapot<TriangleIndex> {
   pub fn new_triangle_index() -> Result<Self> {
-    let simple_obj = SimpleObj::load_from(common::teapot_path())?;
+    let simple_obj = SimpleObj::load_from(&common::teapot_path())?;
     let mesh = TriangleIndex::from_simple_obj(simple_obj);
     Self::new(mesh)
   }
