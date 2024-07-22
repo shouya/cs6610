@@ -1,17 +1,15 @@
 mod light;
 mod mesh;
-mod teapot;
 
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface};
 
-use teapot::{Teapot, TeapotKind};
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
   event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
-  keyboard::{Key, ModifiersState, NamedKey},
+  keyboard::{ModifiersState, NamedKey},
   window::{Window, WindowId},
 };
 
@@ -33,8 +31,6 @@ struct World {
   camera: Camera,
   show_axis: bool,
   axis: Option<Axis>,
-  teapots: Vec<TeapotKind>,
-  teapot_idx: usize,
   light: Light,
 }
 
@@ -123,14 +119,8 @@ impl World {
       camera: Camera::new(),
       axis: None,
       show_axis: true,
-      teapots: vec![],
-      teapot_idx: 0,
       light: Light::new(),
     }
-  }
-
-  fn add_teapot_alternative<T: Into<TeapotKind>>(&mut self, teapot: T) {
-    self.teapots.push(teapot.into());
   }
 
   fn set_axis(&mut self, axis: Axis) {
@@ -141,11 +131,8 @@ impl World {
     self.camera.update_view();
   }
 
-  fn update(&mut self, dt: Duration) {
+  fn update(&mut self, _dt: Duration) {
     // self.update_bg_color(dt);
-    for teapot in &mut self.teapots {
-      teapot.update(dt);
-    }
   }
 
   fn render(
@@ -156,11 +143,6 @@ impl World {
     let mut frame = context.draw();
     frame.clear_color_and_depth(self.camera.clear_color.into(), 1.0);
 
-    let teapot = &self.teapots[self.teapot_idx];
-    if let Err(e) = teapot.draw(&mut frame, &self.camera, &self.light) {
-      eprintln!("Failed to draw teapot: {}", e);
-    }
-
     if let Some(axis) = self.axis.as_ref() {
       if self.show_axis {
         if let Err(e) = axis.draw(&mut frame, &self.camera.view_projection()) {
@@ -168,8 +150,6 @@ impl World {
         }
       }
     }
-
-    self.light.draw(&mut frame, &self.camera)?;
 
     frame.finish()?;
     Ok(())
@@ -303,15 +283,6 @@ impl App {
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
-    } else if event.logical_key.to_text() == Some("t") {
-      self.world.teapot_idx =
-        (self.world.teapot_idx + 1) % self.world.teapots.len();
-      self.window.request_redraw();
-    } else if let Key::Character(ch) = event.logical_key {
-      if let Some(mode) = teapot::RenderMode::from_key(ch) {
-        self.world.teapots[self.world.teapot_idx].set_render_mode(mode);
-        self.window.request_redraw();
-      }
     }
   }
 
@@ -435,16 +406,6 @@ fn main() -> Result<()> {
   // setup world objects
   let axis = Axis::new(&app.display)?;
   app.world.set_axis(axis);
-  let teapot1 = Teapot::new_triangle_list()?.upload(&app.display);
-  app.world.add_teapot_alternative(teapot1);
-  let teapot2 = Teapot::new_triangle_index()?;
-  let teapot3 = teapot2.to_strips();
-  let teapot2 = teapot2.upload(&app.display);
-  app.world.add_teapot_alternative(teapot2);
-  let teapot3 = teapot3?.upload(&app.display);
-  app.world.add_teapot_alternative(teapot3);
-
-  app.world.light.upload(&app.display)?;
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

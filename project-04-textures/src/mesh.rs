@@ -1,35 +1,18 @@
-use std::{
-  collections::HashMap,
-  hash::{DefaultHasher, Hasher},
-  ops::Range,
-};
+#![allow(non_snake_case)]
 
-use common::{mesh::tear_into_strips, SimpleObj};
+use common::{
+  mesh::{concat_strips, tear_into_strips},
+  DynUniforms, MergedUniform, Mtl,
+};
+use image::RgbImage;
+use std::{borrow::Cow, collections::HashMap, ops::Range};
+
+use crate::Result;
+use common::obj_loader::{MtlLib, Obj, VAIdx};
 use glium::{
-  implement_vertex, index::PrimitiveType, uniforms::Uniforms, DrawParameters,
-  IndexBuffer, Program, VertexBuffer,
+  backend::Facade, implement_vertex, texture::RawImage2d,
+  uniforms::UniformValue, Texture2d,
 };
-use rand::Rng as _;
-
-pub trait MeshFormat {
-  type GPURepr: GPUMeshFormat;
-
-  fn upload(&self, surface: &impl glium::backend::Facade) -> Self::GPURepr;
-}
-
-const VERT_SHADER: &str = include_str!("../assets/mesh.vert");
-const FRAG_SHADER: &str = include_str!("../assets/mesh.frag");
-
-pub trait GPUMeshFormat {
-  fn draw(
-    &self,
-    frame: &mut impl glium::Surface,
-    uniforms: &impl Uniforms,
-    params: &DrawParameters<'_>,
-  );
-}
-
-type DebuggingColor = [f32; 3];
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -47,307 +30,307 @@ impl Vertex {
       )
     }
   }
+
+  fn hash(&self) -> u64 {
+    use std::hash::{DefaultHasher, Hasher as _};
+
+    let mut hasher = DefaultHasher::new();
+    hasher.write(self.as_bytes());
+    hasher.finish()
+  }
 }
 
 implement_vertex!(Vertex, pos, uv, n);
 
-pub struct TriangleList {
-  trigs: Box<[Vertex]>,
+#[derive(Clone)]
+struct Group {
+  name: String,
+  index_range: Range<u32>,
+  mtl: Option<String>,
 }
 
-impl TriangleList {
-  pub fn from_simple_obj(simple_obj: SimpleObj) -> Self {
-    let mut trigs = Vec::new();
-    let to_vert_attr = |[v, vt, vn]: [usize; 3]| Vertex {
-      pos: simple_obj.v[v - 1],
-      uv: [simple_obj.vt[vt - 1][0], simple_obj.vt[vt - 1][1]],
-      n: simple_obj.vn[vn - 1],
-    };
-
-    for trig in simple_obj.trigs() {
-      let [a, b, c] = trig;
-      trigs.push(to_vert_attr(a));
-      trigs.push(to_vert_attr(b));
-      trigs.push(to_vert_attr(c));
-    }
-
-    Self {
-      trigs: trigs.into_boxed_slice(),
-    }
-  }
-}
-
-impl MeshFormat for TriangleList {
-  type GPURepr = TriangleListGPU;
-
-  fn upload(&self, surface: &impl glium::backend::Facade) -> Self::GPURepr {
-    let vbo =
-      VertexBuffer::new(surface, &self.trigs).expect("Failed to create VBO");
-    let program = Program::from_source(surface, VERT_SHADER, FRAG_SHADER, None)
-      .expect("Failed to create program");
-
-    eprintln!("TriangleList, buffer size: {} (v)", vbo.get_size());
-
-    Self::GPURepr { program, vbo }
-  }
-}
-
-pub struct TriangleListGPU {
-  program: Program,
-  vbo: VertexBuffer<Vertex>,
-}
-
-impl GPUMeshFormat for TriangleListGPU {
-  fn draw(
-    &self,
-    frame: &mut impl glium::Surface,
-    uniforms: &impl Uniforms,
-    params: &DrawParameters<'_>,
-  ) {
-    frame
-      .draw(
-        &self.vbo,
-        glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList),
-        &self.program,
-        uniforms,
-        params,
-      )
-      .expect("Failed to draw");
-  }
-}
-
-pub struct TriangleIndex {
+struct Mesh {
   vertices: Vec<Vertex>,
   indices: Vec<u32>,
+  mtl_lib: MtlLib,
+  groups: Vec<Group>,
 }
 
-impl TriangleIndex {
-  pub fn from_simple_obj(simple_obj: SimpleObj) -> Self {
-    // we cannot store vertex because f32 is not Eq. Here we are
-    // assuming the hash function is one-to-one for all values we have.
-    let mut vert_index: HashMap<u64, usize> = Default::default();
+impl Mesh {
+  fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+    let obj = Obj::load_from(&path)?;
+    Ok(Self::from_obj(obj))
+  }
+
+  fn from_obj(obj: Obj) -> Self {
+    // hash(vertex) -> index
+    let mut vert_index: HashMap<u64, usize> = HashMap::new();
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
+    let mut groups = Vec::new();
 
-    let to_vert_attr = |[v, vt, vn]: [usize; 3]| Vertex {
-      pos: simple_obj.v[v - 1],
-      uv: [simple_obj.vt[vt - 1][0], simple_obj.vt[vt - 1][1]],
-      n: simple_obj.vn[vn - 1],
+    let to_vert_attr = |[v, vt, vn]: VAIdx| Vertex {
+      pos: obj.v[v - 1],
+      uv: [obj.vt[vt - 1][0], obj.vt[vt - 1][1]],
+      n: obj.vn[vn - 1],
     };
 
-    for trig in simple_obj.trigs() {
-      for v in trig {
-        let va = to_vert_attr(v);
-        let hash = {
-          let mut hasher = DefaultHasher::new();
-          hasher.write(va.as_bytes());
-          hasher.finish()
-        };
-
-        let i = vert_index.entry(hash).or_insert_with(|| {
-          let i = vertices.len();
-          vertices.push(va);
-          i
-        });
-
-        indices.push(*i as u32);
+    for group in obj.groups {
+      let mut group_indices = Vec::new();
+      for trig in group.trigs() {
+        for v in trig {
+          let va = to_vert_attr(v);
+          let hash = va.hash();
+          let i = vert_index.entry(hash).or_insert_with(|| {
+            vertices.push(va);
+            vertices.len() - 1
+          });
+          group_indices.push(*i as u32);
+        }
       }
+      let strips = tear_into_strips(&group_indices);
+      let group_indices = concat_strips(&strips);
+      let begin = indices.len() as u32;
+      indices.extend_from_slice(&group_indices);
+      let range = begin..(indices.len() as u32);
+      let group = Group {
+        name: group.name,
+        index_range: range,
+        mtl: group.usemtl,
+      };
+      groups.push(group);
     }
 
-    Self { vertices, indices }
-  }
-}
-
-impl MeshFormat for TriangleIndex {
-  type GPURepr = TriangleIndexGPU;
-
-  fn upload(&self, surface: &impl glium::backend::Facade) -> Self::GPURepr {
-    let vbo =
-      VertexBuffer::new(surface, &self.vertices).expect("Failed to create VBO");
-    let ibo =
-      IndexBuffer::new(surface, PrimitiveType::TrianglesList, &self.indices)
-        .expect("Failed to create IBO");
-    let program = Program::from_source(surface, VERT_SHADER, FRAG_SHADER, None)
-      .expect("Failed to create program");
-
-    eprintln!(
-      "TriangleIndex, buffer size: {} ({}/{})",
-      vbo.get_size() + ibo.get_size(),
-      vbo.get_size(),
-      ibo.get_size()
-    );
-
-    TriangleIndexGPU { program, vbo, ibo }
-  }
-}
-
-pub struct TriangleIndexGPU {
-  program: Program,
-  vbo: VertexBuffer<Vertex>,
-  ibo: IndexBuffer<u32>,
-}
-
-impl GPUMeshFormat for TriangleIndexGPU {
-  fn draw(
-    &self,
-    frame: &mut impl glium::Surface,
-    uniforms: &impl Uniforms,
-    params: &DrawParameters<'_>,
-  ) {
-    frame
-      .draw(&self.vbo, &self.ibo, &self.program, uniforms, params)
-      .expect("Failed to draw");
-  }
-}
-
-pub struct TriangleStrip {
-  vertices: Vec<Vertex>,
-  indices: Vec<u32>,
-  // used for debugging only
-  ranges: Vec<(Range<usize>, DebuggingColor)>,
-}
-
-impl From<&TriangleIndex> for TriangleStrip {
-  fn from(
-    TriangleIndex {
-      ref vertices,
-      ref indices,
-    }: &TriangleIndex,
-  ) -> Self {
-    let mut ranges = Vec::new();
-
-    let strips = tear_into_strips(indices);
-    let mut indices =
-      Vec::with_capacity(indices.len() + (strips.len() - 1) * 6);
-
-    for strip in strips {
-      let begin = indices.len();
-      if !indices.is_empty() {
-        // duplicate the last vertex in previous strip
-        indices.extend_from_within(indices.len() - 1..);
-        // duplicate the first vertex in next strip
-        indices.extend_from_slice(&strip[..1]);
-      }
-      indices.extend_from_slice(&strip);
-
-      let end = indices.len();
-      ranges.push((begin..end, rand_color()));
-    }
-
+    let mtl_lib = obj.mtl_lib;
     Self {
-      vertices: vertices.clone(),
-      ranges,
+      vertices,
       indices,
+      mtl_lib,
+      groups,
     }
   }
-}
 
-impl MeshFormat for TriangleStrip {
-  type GPURepr = TriangleStripGPU;
+  fn upload(&self, facade: &impl Facade) -> Result<GPUMesh> {
+    let vbo = glium::VertexBuffer::new(facade, &self.vertices)?;
+    let ibo = glium::IndexBuffer::new(
+      facade,
+      glium::index::PrimitiveType::TriangleStrip,
+      &self.indices,
+    )?;
+    let mtls = self
+      .mtl_lib
+      .mtls
+      .iter()
+      .map(|mtl| {
+        let gpu_mtl = GPUMtl::upload_from(mtl, facade)?;
+        Ok((mtl.name.clone(), gpu_mtl))
+      })
+      .collect::<Result<HashMap<_, _>>>()?;
+    let groups = self.groups.clone();
 
-  fn upload(&self, surface: &impl glium::backend::Facade) -> Self::GPURepr {
-    let vbo =
-      VertexBuffer::new(surface, &self.vertices).expect("Failed to create VBO");
-    let ibo =
-      IndexBuffer::new(surface, PrimitiveType::TriangleStrip, &self.indices)
-        .expect("Failed to create IBO");
-    let program = Program::from_source(surface, VERT_SHADER, FRAG_SHADER, None)
-      .expect("Failed to create program");
-
-    eprintln!(
-      "TriangleStrip, buffer size: {} ({}/{})",
-      vbo.get_size() + ibo.get_size(),
-      vbo.get_size(),
-      ibo.get_size()
-    );
-
-    TriangleStripGPU {
-      program,
+    Ok(GPUMesh {
       vbo,
       ibo,
-      ranges: self.ranges.clone(),
-    }
+      groups,
+      mtls,
+    })
   }
 }
 
-pub struct TriangleStripGPU {
-  program: Program,
-  vbo: VertexBuffer<Vertex>,
-  ibo: IndexBuffer<u32>,
-  ranges: Vec<(Range<usize>, DebuggingColor)>,
+pub struct GPUMtl {
+  Ns: f32,
+  Ni: f32,
+  d: f32,
+  Tr: f32,
+  Tf: [f32; 3],
+  illum: u32,
+  Ka: [f32; 3],
+  Kd: [f32; 3],
+  Ks: [f32; 3],
+  Ke: [f32; 3],
+  map_Ka: Option<glium::texture::Texture2d>,
+  map_Kd: Option<glium::texture::Texture2d>,
+  map_Ks: Option<glium::texture::Texture2d>,
+  map_bump: Option<glium::texture::Texture2d>,
+  map_Ka_enable: u32,
+  map_Kd_enable: u32,
+  map_Ks_enable: u32,
+  map_bump_enable: u32,
 }
 
-impl GPUMeshFormat for TriangleStripGPU {
-  fn draw(
+impl GPUMtl {
+  fn upload_from(mtl: &Mtl, facade: &impl Facade) -> Result<Self> {
+    let mut gpu_mtl = Self {
+      Ns: mtl.Ns,
+      Ni: mtl.Ni,
+      d: mtl.d,
+      Tr: mtl.Tr,
+      Tf: mtl.Tf,
+      illum: mtl.illum,
+      Ka: mtl.Ka,
+      Kd: mtl.Kd,
+      Ks: mtl.Ks,
+      Ke: mtl.Ke,
+      map_Ka: None,
+      map_Kd: None,
+      map_Ks: None,
+      map_bump: None,
+      map_Ka_enable: 0,
+      map_Kd_enable: 0,
+      map_Ks_enable: 0,
+      map_bump_enable: 0,
+    };
+
+    if let Some(img) = &mtl.map_Ka {
+      gpu_mtl.map_Ka = Some(Texture2d::new(facade, to_raw_image(img))?);
+      gpu_mtl.map_Ka_enable = 1;
+    }
+
+    if let Some(img) = &mtl.map_Kd {
+      gpu_mtl.map_Kd = Some(Texture2d::new(facade, to_raw_image(img))?);
+      gpu_mtl.map_Kd_enable = 1;
+    }
+
+    if let Some(img) = &mtl.map_Ks {
+      gpu_mtl.map_Ks = Some(Texture2d::new(facade, to_raw_image(img))?);
+      gpu_mtl.map_Ks_enable = 1;
+    }
+
+    if let Some(img) = &mtl.map_bump {
+      gpu_mtl.map_bump = Some(Texture2d::new(facade, to_raw_image(img))?);
+      gpu_mtl.map_bump_enable = 1;
+    }
+
+    Ok(gpu_mtl)
+  }
+
+  fn to_uniforms(&self) -> impl glium::uniforms::Uniforms + '_ {
+    let mut uniforms = DynUniforms::new();
+
+    uniforms.add("Ns", &self.Ns);
+    uniforms.add("Ni", &self.Ni);
+    uniforms.add("d", &self.d);
+    uniforms.add("Tr", &self.Tr);
+    uniforms.add("Tf", &self.Tf);
+    uniforms.add("illum", &self.illum);
+    uniforms.add("Ka", &self.Ka);
+    uniforms.add("Kd", &self.Kd);
+    uniforms.add("Ks", &self.Ks);
+    uniforms.add("Ke", &self.Ke);
+    uniforms.add("map_Ka_enable", &self.map_Ka_enable);
+    uniforms.add("map_Kd_enable", &self.map_Kd_enable);
+    uniforms.add("map_Ks_enable", &self.map_Ks_enable);
+    uniforms.add("map_bump_enable", &self.map_bump_enable);
+
+    if let Some(map_Ka) = &self.map_Ka {
+      uniforms.add_raw(
+        "map_Ka",
+        UniformValue::Texture2d(map_Ka, Some(sampler_behavior_Ka())),
+      );
+    }
+
+    if let Some(map_Kd) = &self.map_Kd {
+      uniforms.add_raw(
+        "map_Kd",
+        UniformValue::Texture2d(map_Kd, Some(sampler_behavior_Kd())),
+      );
+    }
+
+    if let Some(map_Ks) = &self.map_Ks {
+      uniforms.add_raw(
+        "map_Ks",
+        UniformValue::Texture2d(map_Ks, Some(sampler_behavior_Ks())),
+      );
+    }
+
+    if let Some(map_bump) = &self.map_bump {
+      uniforms.add_raw(
+        "map_bump",
+        UniformValue::Texture2d(map_bump, Some(sampler_behavior_bump())),
+      );
+    }
+
+    uniforms
+  }
+}
+
+pub struct GPUMesh {
+  vbo: glium::VertexBuffer<Vertex>,
+  ibo: glium::IndexBuffer<u32>,
+  groups: Vec<Group>,
+  mtls: HashMap<String, GPUMtl>,
+}
+
+impl GPUMesh {
+  pub fn draw(
     &self,
     frame: &mut impl glium::Surface,
-    uniforms: &impl Uniforms,
-    params: &DrawParameters<'_>,
+    program: &glium::Program,
+    uniforms: &impl glium::uniforms::Uniforms,
+    params: &glium::DrawParameters<'_>,
   ) {
-    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() == Ok("1") {
-      frame
-        .draw(&self.vbo, &self.ibo, &self.program, uniforms, params)
-        .expect("Failed to draw");
-      return;
-    }
+    for group in &self.groups {
+      let mtl = group.mtl.as_deref().and_then(|name| self.mtls.get(name));
+      let range: Range<usize> =
+        (group.index_range.start as usize)..(group.index_range.end as usize);
+      let ibo_slice = self.ibo.slice(range).unwrap();
 
-    let mut new_uniforms = OverridingUniforms::from(uniforms);
-
-    for (range, color) in &self.ranges {
-      new_uniforms.set("k_d", color);
-      let ibo = self.ibo.slice(range.clone()).unwrap();
-      frame
-        .draw(&self.vbo, &ibo, &self.program, &new_uniforms, params)
-        .expect("Failed to draw");
-    }
-  }
-}
-
-fn rand_color() -> DebuggingColor {
-  let mut rng = rand::thread_rng();
-
-  [
-    rng.gen_range(0.0..1.0),
-    rng.gen_range(0.0..1.0),
-    rng.gen_range(0.0..1.0),
-  ]
-}
-
-struct OverridingUniforms<'a, U> {
-  existing: U,
-  overrides: HashMap<&'static str, glium::uniforms::UniformValue<'a>>,
-}
-
-impl<U> From<U> for OverridingUniforms<'_, U> {
-  fn from(existing: U) -> Self {
-    Self {
-      existing,
-      overrides: Default::default(),
-    }
-  }
-}
-
-impl<'a, U> OverridingUniforms<'a, U> {
-  fn set(
-    &mut self,
-    name: &'static str,
-    value: &'a impl glium::uniforms::AsUniformValue,
-  ) {
-    self.overrides.insert(name, value.as_uniform_value());
-  }
-}
-
-impl<U: Uniforms> Uniforms for OverridingUniforms<'_, &U> {
-  fn visit_values<'a, F: FnMut(&str, glium::uniforms::UniformValue<'a>)>(
-    &'a self,
-    mut output: F,
-  ) {
-    self.existing.visit_values(|name, value| {
-      if let Some(override_value) = self.overrides.get(name) {
-        output(name, *override_value);
+      if let Some(mtl) = mtl {
+        let mtl_uniforms = mtl.to_uniforms();
+        let uniforms = MergedUniform::new(uniforms, &mtl_uniforms);
+        frame
+          .draw(&self.vbo, &ibo_slice, program, &uniforms, params)
+          .expect("Failed to draw");
       } else {
-        output(name, value);
+        frame
+          .draw(&self.vbo, &ibo_slice, program, uniforms, params)
+          .expect("Failed to draw");
       }
-    });
+    }
+  }
+}
+
+const fn sampler_behavior_Kd() -> glium::uniforms::SamplerBehavior {
+  use glium::uniforms::SamplerWrapFunction;
+
+  glium::uniforms::SamplerBehavior {
+    wrap_function: (
+      SamplerWrapFunction::Repeat,
+      SamplerWrapFunction::Repeat,
+      SamplerWrapFunction::Repeat,
+    ),
+    magnify_filter: glium::uniforms::MagnifySamplerFilter::Linear,
+    minify_filter: glium::uniforms::MinifySamplerFilter::Linear,
+    max_anisotropy: 4,
+    depth_texture_comparison: None,
+  }
+}
+
+const fn sampler_behavior_Ks() -> glium::uniforms::SamplerBehavior {
+  glium::uniforms::SamplerBehavior {
+    max_anisotropy: 1,
+    ..sampler_behavior_Kd()
+  }
+}
+
+const fn sampler_behavior_Ka() -> glium::uniforms::SamplerBehavior {
+  sampler_behavior_Ks()
+}
+
+const fn sampler_behavior_bump() -> glium::uniforms::SamplerBehavior {
+  sampler_behavior_Ks()
+}
+
+fn to_raw_image(image: &RgbImage) -> RawImage2d<'_, u8> {
+  let width = image.width();
+  let height = image.height();
+  let format = glium::texture::ClientFormat::U8U8U8;
+  let data = image.as_raw().clone();
+
+  RawImage2d {
+    data: Cow::Owned(data),
+    width,
+    height,
+    format,
   }
 }

@@ -68,6 +68,20 @@ pub fn tear_into_strips(indices: &[u32]) -> Vec<Vec<u32>> {
   strips
 }
 
+pub fn concat_strips(strips: &[Vec<u32>]) -> Vec<u32> {
+  let mut indices = Vec::new();
+  for strip in strips {
+    if !indices.is_empty() {
+      // duplicate the last vertex in previous strip
+      indices.extend_from_within(indices.len() - 1..);
+      // duplicate the first vertex in next strip
+      indices.extend_from_slice(&strip[..1]);
+    }
+    indices.extend_from_slice(strip);
+  }
+  indices
+}
+
 fn validate_trig_strips(indices: &[u32], strips: &[Vec<u32>]) {
   let mut original_trigs: Vec<[u32; 3]> = indices
     .chunks(3)

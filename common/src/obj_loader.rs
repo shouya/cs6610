@@ -20,7 +20,7 @@ pub struct Obj {
   pub vn: Vec<[f32; 3]>,
   pub vt: Vec<[f32; 3]>,
 
-  pub mtl_lib: Option<MtlLib>,
+  pub mtl_lib: MtlLib,
   pub groups: Vec<Group>,
 }
 
@@ -79,8 +79,8 @@ pub struct Mtl {
   pub Ke: [f32; 3],
   pub map_Ka: Option<RgbImage>,
   pub map_Kd: Option<RgbImage>,
+  pub map_Ks: Option<RgbImage>,
   pub map_bump: Option<RgbImage>,
-  pub bump: Option<RgbImage>,
 }
 
 impl Default for Mtl {
@@ -99,20 +99,15 @@ impl Default for Mtl {
       Ke: [0.0, 0.0, 0.0],
       map_Ka: None,
       map_Kd: None,
+      map_Ks: None,
       map_bump: None,
-      bump: None,
     }
   }
 }
 
+#[derive(Default)]
 pub struct MtlLib {
   pub mtls: Vec<Mtl>,
-}
-
-impl MtlLib {
-  pub fn find(&self, name: &str) -> Option<&Mtl> {
-    self.mtls.iter().find(|mtl| mtl.name == name)
-  }
 }
 
 // immutable raw obj data
@@ -252,7 +247,7 @@ impl ObjLoader {
     let mut vt = Vec::new();
     let mut groups = Vec::new();
     let mut current_group = Group::default();
-    let mut mtl_lib = None;
+    let mut mtl_lib = MtlLib::default();
 
     for line in input.lines() {
       let line = line?;
@@ -268,7 +263,7 @@ impl ObjLoader {
           let path = self.base.join(data);
           let file = std::fs::File::open(path)?;
           let mut reader = std::io::BufReader::new(file);
-          mtl_lib = Some(self.parse_mtl_lib(&mut reader)?);
+          mtl_lib = self.parse_mtl_lib(&mut reader)?;
         }
 
         "v" => v.push(self.parse_v(data)?),
@@ -349,15 +344,15 @@ impl ObjLoader {
           let img = image::open(path)?;
           current_mtl.map_Kd = Some(img.into_rgb8());
         }
+        "map_Ks" => {
+          let path = self.base.join(data);
+          let img = image::open(path)?;
+          current_mtl.map_Ks = Some(img.into_rgb8());
+        }
         "map_bump" => {
           let path = self.base.join(data);
           let img = image::open(path)?;
           current_mtl.map_bump = Some(img.into_rgb8());
-        }
-        "bump" => {
-          let path = self.base.join(data);
-          let img = image::open(path)?;
-          current_mtl.bump = Some(img.into_rgb8());
         }
         _ => {}
       }

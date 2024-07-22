@@ -1,12 +1,14 @@
 pub mod axis;
 pub mod gl_boilerplate;
+mod glium_helper;
 pub mod mesh;
 pub mod obj_loader;
 
 use std::path::PathBuf;
 
 pub use axis::Axis;
-pub use obj_loader::SimpleObj;
+pub use glium_helper::{DynUniforms, MergedUniform};
+pub use obj_loader::{Group, Mtl, MtlLib, Obj, SimpleObj, VAIdx};
 
 pub fn teapot_path() -> PathBuf {
   asset_path("teapot.obj")

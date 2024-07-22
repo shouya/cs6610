@@ -1336,6 +1336,7 @@ dependencies = [
  "common",
  "derive_more",
  "glium",
+ "image",
  "rand",
  "winit",
 ]
