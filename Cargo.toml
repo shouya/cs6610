@@ -7,7 +7,9 @@ edition = "2021"
 members = [
   "common",
   "project-01-hello-world",
-  "project-02-transformations", "project-03-shading",
+  "project-02-transformations",
+  "project-03-shading",
+  "project-04-textures",
 ]
 
 [workspace.dependencies]
