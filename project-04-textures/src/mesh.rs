@@ -72,7 +72,8 @@ impl Mesh {
 
     let to_vert_attr = |[v, vt, vn]: VAIdx| Vertex {
       pos: obj.v[v - 1],
-      uv: [obj.vt[vt - 1][0], obj.vt[vt - 1][1]],
+      // the y component of the uv-coordinates is reversed!
+      uv: [obj.vt[vt - 1][0], -obj.vt[vt - 1][1]],
       n: obj.vn[vn - 1],
     };
 

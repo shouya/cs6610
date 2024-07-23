@@ -2,7 +2,7 @@ mod light;
 mod mesh;
 mod object;
 
-use std::{env::args, fmt::Debug, time::Duration};
+use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface};
 
@@ -428,17 +428,19 @@ fn main() -> Result<()> {
 
   // setup the main object
   // app.world.add_object(Teapot::load(&app.display)?);
-  match args().next().as_deref() {
+  let mut args = std::env::args();
+  let bin_name = args.next().unwrap(); // skip $0
+  match args.next().as_deref() {
     Some("teapot") => app.world.add_object(Teapot::load(&app.display)?),
     Some("yoda") => app.world.add_object(Yoda::load(&app.display)?),
-    Some(_) => {
-      eprintln!("Unknown model");
-      eprintln!("Usage: {} [teapot|yoda]", args().next().unwrap());
+    Some(name) => {
+      eprintln!("Unknown model: {name}");
+      eprintln!("Usage: {} [teapot|yoda]", bin_name);
       eprintln!("Loading the yoda model by default");
       app.world.add_object(Yoda::load(&app.display)?);
     }
     None => {
-      eprintln!("Usage: {} [teapot|yoda]", args().next().unwrap());
+      eprintln!("Usage: {} [teapot|yoda]", bin_name);
       eprintln!("Loading the yoda model by default");
       app.world.add_object(Yoda::load(&app.display)?);
     }

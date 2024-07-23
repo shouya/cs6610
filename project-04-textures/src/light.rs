@@ -14,7 +14,7 @@ pub struct Light {
 impl Light {
   pub fn new() -> Self {
     Self {
-      color: [1.0, 1.0, 1.0],
+      color: [10.0, 10.0, 10.0],
       distance: 1.0,
       rotation: 0.0,
     }

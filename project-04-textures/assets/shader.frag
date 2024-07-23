@@ -42,21 +42,21 @@ void main() {
 
   vec3 oKd;
   if (use_map_Kd == 1u) {
-    oKd = texture(map_Kd, uv_t).rgb;
+    oKd = texture(map_Kd, uv_t).rgb * Kd;
   } else {
     oKd = Kd;
   }
 
   vec3 oKs;
   if (use_map_Ks == 1u) {
-    oKs = texture(map_Ks, uv_t).rgb;
+    oKs = texture(map_Ks, uv_t).rgb * Ks;
   } else {
     oKs = Ks;
   }
 
   vec3 oKa;
   if (use_map_Ka == 1u) {
-    oKa = texture(map_Ka, uv_t).rgb;
+    oKa = texture(map_Ka, uv_t).rgb * Ka;
   } else {
     oKa = Ka;
   }

@@ -27,6 +27,5 @@ void main()
   pos_v = (mv * vec4(pos, 1.0)).xyz;
   n_v = mv_n * n;
 
-  // the y component of the uv-coordinates is reversed!
-  uv_t = vec2(uv.x, -uv.y);
+  uv_t = uv;
 }
