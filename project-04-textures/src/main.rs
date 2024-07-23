@@ -2,7 +2,7 @@ mod light;
 mod mesh;
 mod object;
 
-use std::{fmt::Debug, time::Duration};
+use std::{env::args, fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface};
 
@@ -428,7 +428,21 @@ fn main() -> Result<()> {
 
   // setup the main object
   // app.world.add_object(Teapot::load(&app.display)?);
-  app.world.add_object(Yoda::load(&app.display)?);
+  match args().next().as_deref() {
+    Some("teapot") => app.world.add_object(Teapot::load(&app.display)?),
+    Some("yoda") => app.world.add_object(Yoda::load(&app.display)?),
+    Some(_) => {
+      eprintln!("Unknown model");
+      eprintln!("Usage: {} [teapot|yoda]", args().next().unwrap());
+      eprintln!("Loading the yoda model by default");
+      app.world.add_object(Yoda::load(&app.display)?);
+    }
+    None => {
+      eprintln!("Usage: {} [teapot|yoda]", args().next().unwrap());
+      eprintln!("Loading the yoda model by default");
+      app.world.add_object(Yoda::load(&app.display)?);
+    }
+  }
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

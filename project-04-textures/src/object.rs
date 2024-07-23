@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::path::{Path, PathBuf};
 
 use cgmath::{Matrix as _, Matrix3, Matrix4, SquareMatrix as _, Transform};
@@ -137,8 +136,8 @@ fn load_program(
   let vert_path = path.with_extension("vert");
   let frag_path = path.with_extension("frag");
 
-  let vert_src = std::fs::read_to_string(&vert_path)?;
-  let frag_src = std::fs::read_to_string(&frag_path)?;
+  let vert_src = std::fs::read_to_string(vert_path)?;
+  let frag_src = std::fs::read_to_string(frag_path)?;
 
   Ok(Program::from_source(facade, &vert_src, &frag_src, None)?)
 }
