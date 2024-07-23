@@ -6,7 +6,7 @@ use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface};
 
-use object::GPUObject;
+use object::{GPUObject, Teapot, Yoda};
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -17,11 +17,10 @@ use winit::{
 
 use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
 
-use common::{teapot_path, Axis};
+use common::Axis;
 use light::Light;
 
-type Error = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, Error>;
+type Result<T> = anyhow::Result<T>;
 
 #[derive(Debug)]
 enum UserSignal {
@@ -297,6 +296,12 @@ impl App {
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
+    } else if event.logical_key == NamedKey::F6 {
+      for obj in self.world.objects.iter_mut() {
+        obj.reload_shader(&self.display).unwrap();
+      }
+      println!("Reloaded shaders");
+      self.window.request_redraw();
     }
   }
 
@@ -422,8 +427,8 @@ fn main() -> Result<()> {
   app.world.set_axis(axis);
 
   // setup the main object
-  let object = GPUObject::load(&teapot_path(), &"assets/shader", &app.display)?;
-  app.world.add_object(object);
+  // app.world.add_object(Teapot::load(&app.display)?);
+  app.world.add_object(Yoda::load(&app.display)?);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

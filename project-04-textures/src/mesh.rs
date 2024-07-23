@@ -153,10 +153,10 @@ pub struct GPUMtl {
   map_Kd: Option<glium::texture::Texture2d>,
   map_Ks: Option<glium::texture::Texture2d>,
   map_bump: Option<glium::texture::Texture2d>,
-  map_Ka_enable: u32,
-  map_Kd_enable: u32,
-  map_Ks_enable: u32,
-  map_bump_enable: u32,
+  use_map_Ka: u32,
+  use_map_Kd: u32,
+  use_map_Ks: u32,
+  use_map_bump: u32,
 }
 
 impl GPUMtl {
@@ -176,30 +176,30 @@ impl GPUMtl {
       map_Kd: None,
       map_Ks: None,
       map_bump: None,
-      map_Ka_enable: 0,
-      map_Kd_enable: 0,
-      map_Ks_enable: 0,
-      map_bump_enable: 0,
+      use_map_Ka: 0,
+      use_map_Kd: 0,
+      use_map_Ks: 0,
+      use_map_bump: 0,
     };
 
     if let Some(img) = &mtl.map_Ka {
-      gpu_mtl.map_Ka = Some(Texture2d::new(facade, to_raw_image(img))?);
-      gpu_mtl.map_Ka_enable = 1;
+      gpu_mtl.map_Ka = Some(upload_texture(facade, img));
+      gpu_mtl.use_map_Ka = 1;
     }
 
     if let Some(img) = &mtl.map_Kd {
-      gpu_mtl.map_Kd = Some(Texture2d::new(facade, to_raw_image(img))?);
-      gpu_mtl.map_Kd_enable = 1;
+      gpu_mtl.map_Kd = Some(upload_texture(facade, img));
+      gpu_mtl.use_map_Kd = 1;
     }
 
     if let Some(img) = &mtl.map_Ks {
-      gpu_mtl.map_Ks = Some(Texture2d::new(facade, to_raw_image(img))?);
-      gpu_mtl.map_Ks_enable = 1;
+      gpu_mtl.map_Ks = Some(upload_texture(facade, img));
+      gpu_mtl.use_map_Ks = 1;
     }
 
     if let Some(img) = &mtl.map_bump {
-      gpu_mtl.map_bump = Some(Texture2d::new(facade, to_raw_image(img))?);
-      gpu_mtl.map_bump_enable = 1;
+      gpu_mtl.map_bump = Some(upload_texture(facade, img));
+      gpu_mtl.use_map_bump = 1;
     }
 
     Ok(gpu_mtl)
@@ -218,10 +218,10 @@ impl GPUMtl {
     uniforms.add("Kd", &self.Kd);
     uniforms.add("Ks", &self.Ks);
     uniforms.add("Ke", &self.Ke);
-    uniforms.add("map_Ka_enable", &self.map_Ka_enable);
-    uniforms.add("map_Kd_enable", &self.map_Kd_enable);
-    uniforms.add("map_Ks_enable", &self.map_Ks_enable);
-    uniforms.add("map_bump_enable", &self.map_bump_enable);
+    uniforms.add("use_map_Ka", &self.use_map_Ka);
+    uniforms.add("use_map_Kd", &self.use_map_Kd);
+    uniforms.add("use_map_Ks", &self.use_map_Ks);
+    uniforms.add("use_map_bump", &self.use_map_bump);
 
     if let Some(map_Ka) = &self.map_Ka {
       uniforms.add_raw(
@@ -334,4 +334,10 @@ fn to_raw_image(image: &RgbImage) -> RawImage2d<'_, u8> {
     height,
     format,
   }
+}
+
+fn upload_texture(facade: &impl Facade, image: &RgbImage) -> Texture2d {
+  let texture = Texture2d::new(facade, to_raw_image(image)).unwrap();
+  unsafe { texture.generate_mipmaps() };
+  texture
 }

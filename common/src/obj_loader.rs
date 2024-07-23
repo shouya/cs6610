@@ -10,8 +10,8 @@ struct ObjLoader {
   base: PathBuf,
 }
 
-pub type Error = Box<dyn std::error::Error>;
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Error = anyhow::Error;
+pub type Result<T> = anyhow::Result<T>;
 
 pub type VAIdx = [usize; 3];
 
@@ -173,9 +173,9 @@ impl ObjLoader {
 
   fn parse_vec3f(&self, line: &str) -> Result<[f32; 3]> {
     let mut parts = line.split_whitespace();
-    let x = parts.next().ok_or("missing x")?.parse()?;
-    let y = parts.next().ok_or("missing y")?.parse()?;
-    let z = parts.next().ok_or("missing z")?.parse()?;
+    let x = parts.next().ok_or(Error::msg("missing x"))?.parse()?;
+    let y = parts.next().ok_or(Error::msg("missing y"))?.parse()?;
+    let z = parts.next().ok_or(Error::msg("missing z"))?.parse()?;
     Ok([x, y, z])
   }
 
@@ -185,8 +185,8 @@ impl ObjLoader {
 
   fn parse_vec2f_or_vec3f(&self, line: &str) -> Result<[f32; 3]> {
     let mut parts = line.split_whitespace();
-    let x = parts.next().ok_or("missing x")?.parse()?;
-    let y = parts.next().ok_or("missing y")?.parse()?;
+    let x = parts.next().ok_or(Error::msg("missing x"))?.parse()?;
+    let y = parts.next().ok_or(Error::msg("missing y"))?.parse()?;
     let z = parts.next().unwrap_or("0.0").parse()?;
     Ok([x, y, z])
   }
@@ -197,9 +197,9 @@ impl ObjLoader {
 
   fn parse_f_vertex(&self, vert: &str) -> Result<VAIdx> {
     let mut parts = vert.split('/');
-    let v = parts.next().ok_or("missing v")?.parse()?;
-    let vt = parts.next().ok_or("missing vt")?.parse()?;
-    let vn = parts.next().ok_or("missing vn")?.parse()?;
+    let v = parts.next().ok_or(Error::msg("missing v"))?.parse()?;
+    let vt = parts.next().ok_or(Error::msg("missing vt"))?.parse()?;
+    let vn = parts.next().ok_or(Error::msg("missing vn"))?.parse()?;
     Ok([v, vt, vn])
   }
 
@@ -226,7 +226,8 @@ impl ObjLoader {
         continue;
       }
 
-      let (ty, data) = line.split_once(' ').ok_or("missing type")?;
+      let (ty, data) =
+        line.split_once(' ').ok_or(Error::msg("missing type"))?;
       let data = data.trim();
       match ty {
         "v" => v.push(self.parse_v(data)?),
@@ -256,7 +257,8 @@ impl ObjLoader {
         continue;
       }
 
-      let (ty, data) = line.split_once(' ').ok_or("missing type")?;
+      let (ty, data) =
+        line.split_once(' ').ok_or(Error::msg("missing type"))?;
       let data = data.trim();
       match ty {
         "mtllib" => {
@@ -311,7 +313,8 @@ impl ObjLoader {
         continue;
       }
 
-      let (ty, data) = line.split_once(' ').ok_or("missing type")?;
+      let (ty, data) =
+        line.split_once(' ').ok_or(Error::msg("missing type"))?;
       let data = data.trim();
       match ty {
         "newmtl" => {

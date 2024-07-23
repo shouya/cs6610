@@ -48,8 +48,8 @@ const VF_F32x3: glium::vertex::VertexFormat = &[(
   false,
 )];
 
-type Error = Box<dyn std::error::Error>;
-type Result<T> = std::result::Result<T, Error>;
+pub type Error = anyhow::Error;
+pub type Result<T> = anyhow::Result<T>;
 
 impl Axis {
   pub fn new<F: Facade>(context: &F) -> Result<Self> {

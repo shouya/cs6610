@@ -1,19 +1,73 @@
-use std::path::Path;
+use std::any::Any;
+use std::path::{Path, PathBuf};
 
 use cgmath::{Matrix as _, Matrix3, Matrix4, SquareMatrix as _, Transform};
+use common::{asset_path, teapot_path};
 use glium::{uniform, DrawParameters, Program};
 
 use crate::light::Light;
 use crate::mesh::{GPUMesh, Mesh};
 use crate::{Camera, Result};
 
+pub struct Teapot;
+
+impl Teapot {
+  pub fn load(facade: &impl glium::backend::Facade) -> Result<GPUObject> {
+    const SHADER_PATH: &str =
+      concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
+    let mut object = GPUObject::load(&teapot_path(), &SHADER_PATH, facade)?;
+
+    object.model = Matrix4::from_scale(0.05)
+      * Matrix4::from_angle_y(cgmath::Rad(0.0))
+    // the object itself is rotated 90 to the front, let's rotate it back a little.
+      * Matrix4::from_angle_x(cgmath::Deg(-90.0));
+
+    Ok(object)
+  }
+}
+
+pub struct Yoda;
+
+impl Yoda {
+  pub fn load(facade: &impl glium::backend::Facade) -> Result<GPUObject> {
+    const SHADER_PATH: &str =
+      concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
+    let yoda_model = asset_path("yoda/yoda.obj");
+    let mut object = GPUObject::load(&yoda_model, &SHADER_PATH, facade)?;
+
+    object.model = Matrix4::from_translation([0.0, -0.3, 0.0].into())
+      * Matrix4::from_scale(0.0003)
+      * Matrix4::from_angle_y(cgmath::Deg(180.0))
+      * Matrix4::from_angle_x(cgmath::Deg(-90.0));
+
+    Ok(object)
+  }
+}
+
 pub struct GPUObject {
+  shader_path: PathBuf,
   program: Program,
   mesh: GPUMesh,
   model: Matrix4<f32>,
 }
 
 impl GPUObject {
+  pub fn reload_shader(
+    &mut self,
+    facade: &impl glium::backend::Facade,
+  ) -> Result<()> {
+    let shader_path = &self.shader_path;
+
+    match load_program(shader_path, facade) {
+      Ok(program) => self.program = program,
+      Err(e) => {
+        eprintln!("Failed to reload shader: {}", e);
+      }
+    }
+
+    Ok(())
+  }
+
   pub fn load(
     obj_path: &impl AsRef<Path>,
     shader_path: &impl AsRef<Path>,
@@ -21,20 +75,11 @@ impl GPUObject {
   ) -> Result<Self> {
     let mesh = Mesh::load(obj_path)?;
     let mesh = mesh.upload(facade)?;
-
-    let vert_path = shader_path.as_ref().with_extension("vert");
-    let frag_path = shader_path.as_ref().with_extension("frag");
-
-    let program = Program::from_source(
-      facade,
-      &std::fs::read_to_string(vert_path)?,
-      &std::fs::read_to_string(frag_path)?,
-      None,
-    )?;
-
+    let program = load_program(shader_path.as_ref(), facade)?;
     let model = Matrix4::identity();
 
     Ok(Self {
+      shader_path: shader_path.as_ref().to_path_buf(),
       program,
       mesh,
       model,
@@ -83,4 +128,17 @@ impl GPUObject {
 
     self.mesh.draw(frame, program, &uniforms, &draw_params);
   }
+}
+
+fn load_program(
+  path: &Path,
+  facade: &impl glium::backend::Facade,
+) -> Result<Program> {
+  let vert_path = path.with_extension("vert");
+  let frag_path = path.with_extension("frag");
+
+  let vert_src = std::fs::read_to_string(&vert_path)?;
+  let frag_src = std::fs::read_to_string(&frag_path)?;
+
+  Ok(Program::from_source(facade, &vert_src, &frag_src, None)?)
 }

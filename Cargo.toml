@@ -18,3 +18,4 @@ glium = "0.34.0"
 raw-window-handle = "0.5"
 winit = "0.29.15"
 image = "0.25.2"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
