@@ -30,6 +30,7 @@ impl Light {
     self.rotation += delta;
   }
 
+  #[allow(dead_code)]
   fn model(&self) -> Matrix4<f32> {
     Matrix4::from_translation(self.position_world().into())
       * Matrix4::from_scale(0.05)

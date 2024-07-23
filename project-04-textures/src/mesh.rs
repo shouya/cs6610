@@ -44,12 +44,13 @@ implement_vertex!(Vertex, pos, uv, n);
 
 #[derive(Clone)]
 struct Group {
+  #[allow(dead_code)]
   name: String,
   index_range: Range<u32>,
   mtl: Option<String>,
 }
 
-struct Mesh {
+pub struct Mesh {
   vertices: Vec<Vertex>,
   indices: Vec<u32>,
   mtl_lib: MtlLib,
@@ -57,12 +58,12 @@ struct Mesh {
 }
 
 impl Mesh {
-  fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+  pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
     let obj = Obj::load_from(&path)?;
     Ok(Self::from_obj(obj))
   }
 
-  fn from_obj(obj: Obj) -> Self {
+  pub fn from_obj(obj: Obj) -> Self {
     // hash(vertex) -> index
     let mut vert_index: HashMap<u64, usize> = HashMap::new();
     let mut vertices = Vec::new();
@@ -110,7 +111,7 @@ impl Mesh {
     }
   }
 
-  fn upload(&self, facade: &impl Facade) -> Result<GPUMesh> {
+  pub fn upload(&self, facade: &impl Facade) -> Result<GPUMesh> {
     let vbo = glium::VertexBuffer::new(facade, &self.vertices)?;
     let ibo = glium::IndexBuffer::new(
       facade,

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cgmath::Matrix as _;
 use cgmath::Matrix3;
-use cgmath::Point3;
+use cgmath::SquareMatrix as _;
 use cgmath::Transform;
 use derive_more::From;
 
@@ -178,10 +178,7 @@ impl<Mesh> Teapot<Mesh> {
       y: mv.y.truncate(),
       z: mv.z.truncate(),
     };
-    let mv_n: Matrix3<f32> =
-      <Matrix3<f32> as Transform<Point3<f32>>>::inverse_transform(&mv3)
-        .unwrap()
-        .transpose();
+    let mv_n: Matrix3<f32> = mv3.invert().unwrap().transpose();
     let mvp: Matrix4<f32> = camera.projection() * mv;
 
     // in view space

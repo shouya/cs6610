@@ -1,10 +1,12 @@
 mod light;
 mod mesh;
+mod object;
 
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface};
 
+use object::GPUObject;
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -15,7 +17,7 @@ use winit::{
 
 use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
 
-use common::Axis;
+use common::{teapot_path, Axis};
 use light::Light;
 
 type Error = Box<dyn std::error::Error>;
@@ -32,6 +34,7 @@ struct World {
   show_axis: bool,
   axis: Option<Axis>,
   light: Light,
+  objects: Vec<object::GPUObject>,
 }
 
 struct Camera {
@@ -120,6 +123,7 @@ impl World {
       axis: None,
       show_axis: true,
       light: Light::new(),
+      objects: Vec::new(),
     }
   }
 
@@ -131,8 +135,10 @@ impl World {
     self.camera.update_view();
   }
 
-  fn update(&mut self, _dt: Duration) {
-    // self.update_bg_color(dt);
+  fn update(&mut self, dt: Duration) {
+    for obj in &mut self.objects {
+      obj.update(&dt);
+    }
   }
 
   fn render(
@@ -151,6 +157,10 @@ impl World {
       }
     }
 
+    for obj in &self.objects {
+      obj.draw(&mut frame, &self.camera, &self.light);
+    }
+
     frame.finish()?;
     Ok(())
   }
@@ -163,6 +173,10 @@ impl World {
     let g = (t * 2.0).sin().abs();
     let b = (t * 3.0).sin().abs();
     self.camera.clear_color = [r, g, b, 1.0];
+  }
+
+  fn add_object(&mut self, object: GPUObject) {
+    self.objects.push(object);
   }
 }
 
@@ -403,9 +417,13 @@ fn main() -> Result<()> {
   let event_loop_proxy = event_loop.create_proxy();
   let mut app = App::new(window, display, event_loop_proxy)?;
 
-  // setup world objects
+  // setup axis object
   let axis = Axis::new(&app.display)?;
   app.world.set_axis(axis);
+
+  // setup the main object
+  let object = GPUObject::load(&teapot_path(), &"assets/shader", &app.display)?;
+  app.world.add_object(object);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));
