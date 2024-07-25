@@ -1,4 +1,7 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{
+  borrow::Cow,
+  collections::{HashMap, HashSet},
+};
 
 use glium::uniforms::{AsUniformValue, UniformValue, Uniforms};
 
@@ -15,12 +18,33 @@ impl<'a> DynUniforms<'a> {
   }
 
   pub fn add(&mut self, name: &'static str, value: &'a dyn AsUniformValue) {
-    self
-      .uniforms
-      .insert(Cow::Borrowed(name), value.as_uniform_value());
+    if self.uniforms.contains_key(name) {
+      return;
+    }
+
+    self.add_override(name, value);
   }
 
   pub fn add_raw(&mut self, name: &'static str, value: UniformValue<'a>) {
+    if self.uniforms.contains_key(name) {
+      return;
+    }
+    self.add_raw_override(name, value);
+  }
+
+  pub fn add_override(
+    &mut self,
+    name: &'static str,
+    value: &'a dyn AsUniformValue,
+  ) {
+    self.add_raw_override(name, value.as_uniform_value());
+  }
+
+  pub fn add_raw_override(
+    &mut self,
+    name: &'static str,
+    value: UniformValue<'a>,
+  ) {
     self.uniforms.insert(Cow::Borrowed(name), value);
   }
 }
@@ -50,7 +74,17 @@ where
   U2: Uniforms,
 {
   fn visit_values<'a, F: FnMut(&str, UniformValue<'a>)>(&'a self, mut f: F) {
-    self.u1.visit_values(|name, value| f(name, value));
-    self.u2.visit_values(|name, value| f(name, value));
+    let mut visited = HashSet::new();
+
+    self.u1.visit_values(|name, value| {
+      if visited.insert(name.to_owned()) {
+        f(name, value);
+      }
+    });
+    self.u2.visit_values(|name, value| {
+      if !visited.contains(name) && visited.insert(name.to_owned()) {
+        f(name, value)
+      }
+    });
   }
 }

@@ -10,6 +10,7 @@ members = [
   "project-02-transformations",
   "project-03-shading",
   "project-04-textures",
+  "project-05-render-buffers"
 ]
 
 [workspace.dependencies]

@@ -1347,6 +1347,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "project-05-textures"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cgmath",
+ "common",
+ "derive_more",
+ "glium",
+ "image",
+ "rand",
+ "winit",
+]
+
+[[package]]
 name = "qoi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

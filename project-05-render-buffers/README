@@ -1,0 +1,20 @@
+My implementation for the fifth project. The project renders the yoda texture to a texture, and then use that texture as color textures to draw the teapot. This is slightly different from the project requirement but I think this looks more interesting.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=5
+
+All CS6610 and optional requirements implemented.
+
+Controls:
+
+left drag: rotate camera
+right drag/wheel: change camera distance
+
+shift+left drag: rotate camera in the indirect scene (yoda)
+shift+right drag/shift+wheel: change camera distance in the indirect scene (yoda)
+
+(I didn't use alt modifier because alt+<key> is reserved by my X window manager).
+
+p: perspective/orthographic projection
+a: show/hide axis
+f6: reload shader
+esc: quit
