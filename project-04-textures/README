@@ -1,34 +1,15 @@
-My implementation for the third project. Shows the shaded teapot in various shading modes.
+My implementation for the fourth project. Renders the teapot/yoda model with textures.
 
-https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=3
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=4
 
 All CS6610 and optional requirements implemented.
 
 Controls:
-
-1-9: Render in specific mode:
-  - 1: Default (FullBlinn)
-  - 2: SurfaceNormal
-  - 3: Depth
-  - 4: ViewPosition
-  - 5: Diffuse
-  - 6: FullBlinn
-  - 7: SpecularBlinn
-  - 8: FullPhong
-  - 9: Plain
 
 left drag: rotate camera
 right drag/wheel: change camera distance
 
 p: perspective/orthographic projection
 a: show/hide axis
-t: switch between teapots built from different mesh modes
-  - triangle list
-  - triangle list with element index
-  - triangle strip with element index
-    default shows debugging color for different strips, start the application with
-    NO_DEBUG_TRIANGLE_STRIP=1 environment to render the mesh normally
-
-  Note: all these modes should render exactly the same.
-
+f6: reload shader
 esc: quit
