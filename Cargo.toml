@@ -10,7 +10,8 @@ members = [
   "project-02-transformations",
   "project-03-shading",
   "project-04-textures",
-  "project-05-render-buffers"
+  "project-05-render-buffers",
+  "project-06-environment-mapping"
 ]
 
 [workspace.dependencies]
@@ -20,3 +21,7 @@ raw-window-handle = "0.5"
 winit = "0.29.15"
 image = "0.25.2"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
+genmesh = "0.6.2"
+
+[profile.dev.package.common]
+opt-level = 2
