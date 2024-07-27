@@ -3,7 +3,11 @@ use std::{
   collections::{HashMap, HashSet},
 };
 
-use glium::uniforms::{AsUniformValue, UniformValue, Uniforms};
+use glium::{
+  texture::RawImage2d,
+  uniforms::{AsUniformValue, UniformValue, Uniforms},
+};
+use image::RgbImage;
 
 #[derive(Default)]
 pub struct DynUniforms<'a> {
@@ -86,5 +90,19 @@ where
         f(name, value)
       }
     });
+  }
+}
+
+pub fn to_raw_image(image: &RgbImage) -> RawImage2d<'_, u8> {
+  let width = image.width();
+  let height = image.height();
+  let format = glium::texture::ClientFormat::U8U8U8;
+  let data = image.as_raw().clone();
+
+  RawImage2d {
+    data: Cow::Owned(data),
+    width,
+    height,
+    format,
   }
 }

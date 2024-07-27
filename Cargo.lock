@@ -90,11 +90,17 @@ dependencies = [
 
 [[package]]
 name = "approx"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08abcc3b4e9339e33a3d0a5ed15d84a687350c05689d825e0f6655eef9e76a94"
+
+[[package]]
+name = "approx"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f2a05fd1bd10b2527e20a2cd32d8873d115b8b39fe219ee25f42a8aca6ba278"
 dependencies = [
- "num-traits",
+ "num-traits 0.2.19",
 ]
 
 [[package]]
@@ -331,12 +337,24 @@ dependencies = [
 
 [[package]]
 name = "cgmath"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64a4b57c8f4e3a2e9ac07e0f6abc9c24b6fc9e1b54c3478cfb598f3d0023e51c"
+dependencies = [
+ "approx 0.1.1",
+ "mint",
+ "num-traits 0.1.43",
+ "rand 0.4.6",
+]
+
+[[package]]
+name = "cgmath"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
 dependencies = [
- "approx",
- "num-traits",
+ "approx 0.4.0",
+ "num-traits 0.2.19",
 ]
 
 [[package]]
@@ -360,7 +378,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath",
+ "cgmath 0.18.0",
  "glium",
  "image",
  "raw-window-handle 0.5.2",
@@ -606,6 +624,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
+name = "fuchsia-cprng"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
+
+[[package]]
+name = "genmesh"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093d52460513e54346e440eadad05a799378654001d7c3a384c3d1e59b5f1e9f"
+dependencies = [
+ "cgmath 0.16.1",
+ "mint",
+]
+
+[[package]]
 name = "gethostname"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -788,7 +822,7 @@ dependencies = [
  "exr",
  "gif",
  "image-webp",
- "num-traits",
+ "num-traits 0.2.19",
  "png",
  "qoi",
  "ravif",
@@ -1029,6 +1063,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
+
+[[package]]
 name = "ndk"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1088,7 +1128,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
- "num-traits",
+ "num-traits 0.2.19",
 ]
 
 [[package]]
@@ -1108,7 +1148,7 @@ version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
 dependencies = [
- "num-traits",
+ "num-traits 0.2.19",
 ]
 
 [[package]]
@@ -1119,7 +1159,16 @@ checksum = "f83d14da390562dca69fc84082e73e548e1ad308d24accdedd2720017cb37824"
 dependencies = [
  "num-bigint",
  "num-integer",
- "num-traits",
+ "num-traits 0.2.19",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e5113e9fd4cc14ded8e499429f396a20f98c772a47cc8622a736e1ec843c31"
+dependencies = [
+ "num-traits 0.2.19",
 ]
 
 [[package]]
@@ -1314,7 +1363,7 @@ dependencies = [
 name = "project-02-transformations"
 version = "0.1.0"
 dependencies = [
- "cgmath",
+ "cgmath 0.18.0",
  "common",
  "glium",
  "winit",
@@ -1324,11 +1373,11 @@ dependencies = [
 name = "project-03-shading"
 version = "0.1.0"
 dependencies = [
- "cgmath",
+ "cgmath 0.18.0",
  "common",
  "derive_more",
  "glium",
- "rand",
+ "rand 0.8.5",
  "winit",
 ]
 
@@ -1337,12 +1386,12 @@ name = "project-04-textures"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath",
+ "cgmath 0.18.0",
  "common",
  "derive_more",
  "glium",
  "image",
- "rand",
+ "rand 0.8.5",
  "winit",
 ]
 
@@ -1351,12 +1400,12 @@ name = "project-05-textures"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath",
+ "cgmath 0.18.0",
  "common",
  "derive_more",
  "glium",
  "image",
- "rand",
+ "rand 0.8.5",
  "winit",
 ]
 
@@ -1365,12 +1414,13 @@ name = "project-06-environment-mapping"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath",
+ "cgmath 0.18.0",
  "common",
  "derive_more",
+ "genmesh",
  "glium",
  "image",
- "rand",
+ "rand 0.8.5",
  "winit",
 ]
 
@@ -1409,13 +1459,26 @@ dependencies = [
 
 [[package]]
 name = "rand"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552840b97013b1a26992c11eac34bdd778e464601a4c2054b5f0bff7c6761293"
+dependencies = [
+ "fuchsia-cprng",
+ "libc",
+ "rand_core 0.3.1",
+ "rdrand",
+ "winapi",
+]
+
+[[package]]
+name = "rand"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha",
- "rand_core",
+ "rand_core 0.6.4",
 ]
 
 [[package]]
@@ -1425,8 +1488,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
- "rand_core",
+ "rand_core 0.6.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a6fdeb83b075e8266dcc8762c22776f6877a63111121f5f8c7411e5be7eed4b"
+dependencies = [
+ "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c33a3c44ca05fa6f1807d8e6743f3824e8509beca625669633be0acbdf509dc"
 
 [[package]]
 name = "rand_core"
@@ -1459,11 +1537,11 @@ dependencies = [
  "new_debug_unreachable",
  "noop_proc_macro",
  "num-derive",
- "num-traits",
+ "num-traits 0.2.19",
  "once_cell",
  "paste",
  "profiling",
- "rand",
+ "rand 0.8.5",
  "rand_chacha",
  "simd_helpers",
  "system-deps",
@@ -1517,6 +1595,15 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rdrand"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
+dependencies = [
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -1900,7 +1987,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f32aaa24bacd11e488aa9ba66369c7cd514885742c9fe08cfe85884db3e92b"
 dependencies = [
  "aligned-vec",
- "num-traits",
+ "num-traits 0.2.19",
  "wasm-bindgen",
 ]
 
@@ -2134,6 +2221,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "53a85b86a771b1c87058196170769dd264f66c0782acf1ae6cc51bfd64b39082"
 
 [[package]]
+name = "winapi"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c839a674fcd7a98952e593242ea400abe93992746761e38641405d28b00f419"
+dependencies = [
+ "winapi-i686-pc-windows-gnu",
+ "winapi-x86_64-pc-windows-gnu",
+]
+
+[[package]]
+name = "winapi-i686-pc-windows-gnu"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
+
+[[package]]
 name = "winapi-util"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2141,6 +2244,12 @@ checksum = "4d4cc384e1e73b93bafa6fb4f1df8c41695c8a91cf9c4c64358067d15a7b6c6b"
 dependencies = [
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "winapi-x86_64-pc-windows-gnu"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows-sys"

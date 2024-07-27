@@ -5,19 +5,12 @@ use cgmath::{Matrix as _, Matrix3, Matrix4, SquareMatrix as _, Transform};
 use common::{asset_path, teapot_path, DynUniforms, MergedUniform};
 use glium::backend::{Context, Facade};
 use glium::framebuffer::{DepthRenderBuffer, SimpleFrameBuffer};
-use glium::texture::Cubemap;
 use glium::uniforms::Uniforms;
 use glium::{uniform, DrawParameters, Program, Surface, Texture2d};
 
 use crate::light::Light;
 use crate::mesh::{GPUMesh, Mesh};
 use crate::{Camera, Result};
-
-pub struct Load
-
-pub struct Background {
-  cubemap: Cubemap,
-}
 
 pub struct RenderBuffer {
   texture: Texture2d,

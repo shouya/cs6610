@@ -2,15 +2,15 @@
 
 use common::{
   mesh::{concat_strips, tear_into_strips},
-  DynUniforms, MergedUniform, Mtl,
+  to_raw_image, DynUniforms, MergedUniform, Mtl,
 };
 use image::RgbImage;
-use std::{borrow::Cow, collections::HashMap, ops::Range};
+use std::{collections::HashMap, ops::Range};
 
 use crate::Result;
 use common::obj_loader::{MtlLib, Obj, VAIdx};
 use glium::{
-  backend::Facade, implement_vertex, texture::RawImage2d,
+  backend::Facade, implement_vertex, index::PrimitiveType,
   uniforms::UniformValue, Texture2d,
 };
 
@@ -55,12 +55,55 @@ pub struct Mesh {
   indices: Vec<u32>,
   mtl_lib: MtlLib,
   groups: Vec<Group>,
+  primitive_type: PrimitiveType,
 }
 
 impl Mesh {
   pub fn load<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
     let obj = Obj::load_from(&path)?;
     Ok(Self::from_obj(obj))
+  }
+
+  #[allow(unused)]
+  pub fn from_genmesh<S, P>(shape: S) -> Self
+  where
+    S: genmesh::generators::SharedVertex<genmesh::Vertex>,
+    S: genmesh::generators::IndexedPolygon<P>,
+    P: genmesh::EmitTriangles<Vertex = usize>,
+  {
+    let vertices: Vec<Vertex> = shape
+      .shared_vertex_iter()
+      .map(|v| Vertex {
+        pos: v.pos.into(),
+        uv: [0.0, 0.0],
+        n: v.normal.into(),
+      })
+      .collect();
+    let indices: Vec<u32> = shape
+      .indexed_polygon_iter()
+      .flat_map(|tri| {
+        let mut trigs: Vec<usize> = Vec::new();
+        tri.emit_triangles(|trig| {
+          trigs.extend_from_slice(&[trig.x, trig.y, trig.z]);
+        });
+        trigs
+      })
+      .map(|i| i as u32)
+      .collect();
+
+    let group = Group {
+      name: "default".to_string(),
+      index_range: 0..indices.len() as u32,
+      mtl: None,
+    };
+
+    Self {
+      vertices,
+      indices,
+      mtl_lib: MtlLib::default(),
+      groups: vec![group],
+      primitive_type: PrimitiveType::TrianglesList,
+    }
   }
 
   pub fn from_obj(obj: Obj) -> Self {
@@ -109,16 +152,14 @@ impl Mesh {
       indices,
       mtl_lib,
       groups,
+      primitive_type: PrimitiveType::TriangleStrip,
     }
   }
 
   pub fn upload(&self, facade: &impl Facade) -> Result<GPUMesh> {
     let vbo = glium::VertexBuffer::new(facade, &self.vertices)?;
-    let ibo = glium::IndexBuffer::new(
-      facade,
-      glium::index::PrimitiveType::TriangleStrip,
-      &self.indices,
-    )?;
+    let ibo =
+      glium::IndexBuffer::new(facade, self.primitive_type, &self.indices)?;
     let mtls = self
       .mtl_lib
       .mtls
@@ -321,20 +362,6 @@ pub const fn sampler_behavior_Ka() -> glium::uniforms::SamplerBehavior {
 
 const fn sampler_behavior_bump() -> glium::uniforms::SamplerBehavior {
   sampler_behavior_Ks()
-}
-
-fn to_raw_image(image: &RgbImage) -> RawImage2d<'_, u8> {
-  let width = image.width();
-  let height = image.height();
-  let format = glium::texture::ClientFormat::U8U8U8;
-  let data = image.as_raw().clone();
-
-  RawImage2d {
-    data: Cow::Owned(data),
-    width,
-    height,
-    format,
-  }
 }
 
 fn upload_texture(facade: &impl Facade, image: &RgbImage) -> Texture2d {

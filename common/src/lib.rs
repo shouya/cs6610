@@ -7,7 +7,7 @@ pub mod obj_loader;
 use std::path::PathBuf;
 
 pub use axis::Axis;
-pub use glium_helper::{DynUniforms, MergedUniform};
+pub use glium_helper::{to_raw_image, DynUniforms, MergedUniform};
 pub use obj_loader::{Group, Mtl, MtlLib, Obj, SimpleObj, VAIdx};
 
 pub fn teapot_path() -> PathBuf {
@@ -34,5 +34,17 @@ pub fn asset_path(name: &str) -> PathBuf {
     return path;
   }
 
+  // print cwd
+  println!(
+    "Current working directory: {:?}",
+    std::env::current_dir().unwrap()
+  );
   panic!("Could not find {}", name)
+}
+
+#[macro_export]
+macro_rules! project_asset_path {
+  ($name:literal) => {
+    concat!(env!("CARGO_MANIFEST_DIR"), "/assets/", $name)
+  };
 }

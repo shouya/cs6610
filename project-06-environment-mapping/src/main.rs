@@ -1,14 +1,13 @@
+mod camera;
 mod light;
 mod mesh;
 mod object;
+mod scene;
 
 use std::{fmt::Debug, time::Duration};
 
-use glium::{
-  dynamic_uniform, glutin::surface::WindowSurface, Display, Surface,
-};
-
-use object::{GPUObject, IndirectScene, Teapot, Yoda};
+use glium::{glutin::surface::WindowSurface, Display};
+use scene::Scene;
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -17,10 +16,9 @@ use winit::{
   window::{Window, WindowId},
 };
 
-use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
+use common::{asset_path, Axis};
 
-use common::Axis;
-use light::Light;
+use crate::{camera::Camera, light::Light};
 
 type Result<T> = anyhow::Result<T>;
 
@@ -31,102 +29,18 @@ enum UserSignal {
 
 struct World {
   t: f32,
-  camera: Camera,
   show_axis: bool,
   axis: Option<Axis>,
-  light: Light,
-  indirect_scene: Option<IndirectScene>,
-  object: Option<GPUObject>,
-}
-
-struct Camera {
-  clear_color: [f32; 4],
-  // camera
-  aspect_ratio: f32,
-  distance: f32,
-  rotation: [f32; 2],
-  perspective: bool,
-  // cached matrices
-  m_view: Matrix4<f32>,
-  m_proj: Matrix4<f32>,
-  m_view_proj: Matrix4<f32>,
-}
-
-impl Camera {
-  fn new() -> Self {
-    Self {
-      clear_color: [0.0, 0.0, 0.0, 1.0],
-      aspect_ratio: 1.0,
-      distance: 2.0,
-      rotation: [0.0, 0.0],
-      perspective: true,
-
-      m_view: Matrix4::identity(),
-      m_proj: Matrix4::identity(),
-      m_view_proj: Matrix4::identity(),
-    }
-  }
-
-  fn handle_window_resize(&mut self, new_size: (u32, u32)) {
-    self.aspect_ratio = new_size.0 as f32 / new_size.1 as f32;
-  }
-
-  fn view(&self) -> Matrix4<f32> {
-    self.m_view
-  }
-
-  fn view_projection(&self) -> Matrix4<f32> {
-    self.m_view_proj
-  }
-
-  fn projection(&self) -> Matrix4<f32> {
-    self.m_proj
-  }
-
-  fn calc_view(&self) -> Matrix4<f32> {
-    // default view matrix: eye at (0, 0, 2), looking at (0, 0, -1), up (0, 1, 0)
-    let dir = Matrix3::from_angle_y(Deg(self.rotation[0]))
-      * Matrix3::from_angle_x(-Deg(self.rotation[1]))
-      * Vector3::new(0.0, 0.0, 1.0);
-    let eye = Point3::new(0.0, 0.0, 0.0) + -dir * self.distance;
-    let up = Vector3::new(0.0, 1.0, 0.0);
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    Matrix4::look_at_rh(eye, origin, up)
-  }
-
-  fn calc_proj(&self) -> Matrix4<f32> {
-    if self.perspective {
-      cgmath::perspective(cgmath::Deg(60.0), self.aspect_ratio, 0.1, 100.0)
-    } else {
-      cgmath::Matrix4::from_scale(1.0 / self.distance)
-        * cgmath::ortho(
-          -1.0,
-          1.0,
-          -1.0 / self.aspect_ratio,
-          1.0 / self.aspect_ratio,
-          0.1,
-          100.0,
-        )
-    }
-  }
-
-  fn update_view(&mut self) {
-    self.m_view = self.calc_view();
-    self.m_proj = self.calc_proj();
-    self.m_view_proj = self.m_proj * self.m_view;
-  }
+  scene: Option<Scene>,
 }
 
 impl World {
   fn new() -> Self {
     Self {
       t: 0.0,
-      camera: Camera::new(),
       axis: None,
       show_axis: true,
-      light: Light::new(),
-      object: None,
-      indirect_scene: None,
+      scene: None,
     }
   }
 
@@ -134,21 +48,21 @@ impl World {
     self.axis = Some(axis);
   }
 
+  fn set_scene(&mut self, scene: Scene) {
+    self.scene = Some(scene);
+  }
+
   fn update_view(&mut self) {
-    self.camera.update_view();
+    if let Some(scene) = &mut self.scene {
+      scene.camera.update_view();
+    }
   }
 
   fn update(&mut self, dt: Duration) {
     self.t += dt.as_secs_f32();
 
-    if let Some(object) = &mut self.object {
-      object.update(&dt);
-    }
-
-    if let Some(indirect_scene) = &mut self.indirect_scene {
-      for obj in &mut indirect_scene.objects {
-        obj.update(&dt);
-      }
+    if let Some(scene) = &mut self.scene {
+      scene.update(&dt);
     }
   }
 
@@ -157,60 +71,20 @@ impl World {
     context: &Display<WindowSurface>,
     _dt: Duration,
   ) -> Result<()> {
-    let sampler = self
-      .indirect_scene
-      .as_ref()
-      .and_then(|scene| scene.render().ok())
-      .map(|texture| {
-        texture
-          .sampled()
-          .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-          .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)
-      });
-
     let mut frame = context.draw();
-    frame.clear_color_and_depth(self.camera.clear_color.into(), 1.0);
 
-    if let Some(axis) = self.axis.as_ref() {
+    if let Some(scene) = &self.scene {
+      scene.draw(&mut frame);
+
       if self.show_axis {
-        if let Err(e) = axis.draw(&mut frame, &self.camera.view_projection()) {
-          eprintln!("Failed to draw axis: {}", e);
+        if let Some(axis) = &self.axis {
+          axis.draw(&mut frame, &scene.camera.view_projection())?;
         }
       }
     }
 
-    for obj in &self.object {
-      let uniforms = if let Some(sampler) = &sampler {
-        dynamic_uniform! {
-          map_Kd: sampler,
-          use_map_Kd: &1u32,
-          map_Ka: sampler,
-          use_map_Ka: &1u32,
-          map_Ks: sampler,
-          use_map_Ks: &1u32,
-        }
-      } else {
-        dynamic_uniform! {}
-      };
-
-      obj.draw_with_extra_uniforms(
-        &mut frame,
-        &self.camera,
-        &self.light,
-        uniforms,
-      );
-    }
-
     frame.finish()?;
     Ok(())
-  }
-
-  fn set_indirect_scene(&mut self, scene: IndirectScene) {
-    let _ = self.indirect_scene.insert(scene);
-  }
-
-  fn set_object(&mut self, object: GPUObject) {
-    let _ = self.object.insert(object);
   }
 }
 
@@ -305,10 +179,9 @@ impl App {
 
   fn handle_resize(&mut self, size: PhysicalSize<u32>) {
     println!("Resized to {:?}", size);
-    self
-      .world
-      .camera
-      .handle_window_resize((size.width, size.height));
+    if let Some(scene) = &mut self.world.scene {
+      scene.camera.handle_window_resize((size.width, size.height));
+    }
     self.world.update_view();
     self.window.request_redraw();
   }
@@ -325,24 +198,22 @@ impl App {
     if event.logical_key == NamedKey::Escape {
       self.event_loop.send_event(UserSignal::Quit).unwrap();
     } else if event.logical_key.to_text() == Some("p") {
-      self.world.camera.perspective ^= true;
-      self.world.update_view();
+      if let Some(scene) = &mut self.world.scene {
+        scene.camera.toggle_perspective();
+        scene.camera.update_view();
+      }
       self.window.request_redraw();
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
     } else if event.logical_key == NamedKey::F6 {
-      if let Some(indirect_scene) = &mut self.world.indirect_scene {
-        for obj in &mut indirect_scene.objects {
-          obj.reload_shader(&self.display).unwrap();
+      if let Some(scene) = &mut self.world.scene {
+        match scene.reload_shader(&self.display) {
+          Ok(_) => println!("Reloaded shaders"),
+          Err(e) => eprintln!("Failed to reload shader: {}", e),
         }
       }
 
-      if let Some(object) = &mut self.world.object {
-        object.reload_shader(&self.display).unwrap();
-      }
-
-      println!("Reloaded shaders");
       self.window.request_redraw();
     }
   }
@@ -405,25 +276,18 @@ impl App {
     position: winit::dpi::PhysicalPosition<f64>,
   ) {
     self.mouse_pos = [position.x as f32, position.y as f32];
-    let indirect_scene = self.world.indirect_scene.as_mut().unwrap();
+    let Some(scene) = self.world.scene.as_mut() else {
+      return;
+    };
 
-    let camera_target: &mut Camera = if self.modifiers.shift_key() {
-      &mut indirect_scene.camera
-    } else {
-      &mut self.world.camera
-    };
-    let light_target: &mut Light = if self.modifiers.shift_key() {
-      &mut indirect_scene.light
-    } else {
-      &mut self.world.light
-    };
+    let camera_target: &mut Camera = &mut scene.camera;
+    let light_target: &mut Light = &mut scene.light;
 
     // left drag: rotate camera
     if self.mouse_down.0 && !self.modifiers.control_key() {
       let dx = self.mouse_pos[0] - self.last_pos[0];
       let dy = self.mouse_pos[1] - self.last_pos[1];
-      camera_target.rotation[0] += dx * 0.1;
-      camera_target.rotation[1] += dy * 0.1;
+      camera_target.add_rotation([dx * 0.1, dy * 0.1]);
     }
 
     // ctrl + left drag: rotate light
@@ -437,11 +301,9 @@ impl App {
     if self.mouse_down.1 {
       let dy = self.mouse_pos[1] - self.last_pos[1];
 
-      camera_target.distance += dy * 0.01;
-      camera_target.distance = camera_target.distance.clamp(0.1, 10.0);
+      camera_target.add_distance(dy * 0.01);
     }
 
-    indirect_scene.camera.update_view();
     self.world.update_view();
     self.last_pos = self.mouse_pos;
     self.window.request_redraw();
@@ -458,15 +320,12 @@ impl App {
       winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
     };
 
-    let indirect_scene = self.world.indirect_scene.as_mut().unwrap();
-    let camera_target: &mut Camera = if self.modifiers.shift_key() {
-      &mut indirect_scene.camera
-    } else {
-      &mut self.world.camera
+    let Some(scene) = self.world.scene.as_mut() else {
+      return;
     };
-    camera_target.distance -= d * 0.01;
-    camera_target.distance = camera_target.distance.clamp(0.1, 10.0);
-    indirect_scene.camera.update_view();
+
+    let camera_target: &mut Camera = &mut scene.camera;
+    camera_target.add_distance(d * 0.01);
     self.world.update_view();
   }
 }
@@ -485,11 +344,19 @@ fn main() -> Result<()> {
   let axis = Axis::new(&app.display)?;
   app.world.set_axis(axis);
 
-  // setup the main object
-  app.world.set_object(Teapot::load(&app.display)?);
-
-  let indirect_scene = Yoda::load_indirect_scene(&app.display)?;
-  app.world.set_indirect_scene(indirect_scene);
+  // setup the scene
+  let scene = Scene::new(
+    &app.display,
+    &[
+      &asset_path("cubemap/cubemap_posx.png"),
+      &asset_path("cubemap/cubemap_negx.png"),
+      &asset_path("cubemap/cubemap_posy.png"),
+      &asset_path("cubemap/cubemap_negy.png"),
+      &asset_path("cubemap/cubemap_posz.png"),
+      &asset_path("cubemap/cubemap_negz.png"),
+    ],
+  )?;
+  app.world.set_scene(scene);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));
