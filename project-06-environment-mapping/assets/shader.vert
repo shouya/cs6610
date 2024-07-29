@@ -14,7 +14,6 @@ uniform mat3 mv3, mv_n; // for transforming vertex normals
 uniform sampler2D map_bump;
 uniform uint use_map_bump;
 
-
 void main()
 {
   vec3 pos = pos;

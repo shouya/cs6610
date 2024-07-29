@@ -1,82 +1,18 @@
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
-use cgmath::{Matrix as _, Matrix3, Matrix4, SquareMatrix as _, Transform};
+use cgmath::{
+  Matrix as _, Matrix3, Matrix4, Point3, SquareMatrix as _, Transform,
+};
 use common::{asset_path, teapot_path, DynUniforms, MergedUniform};
-use glium::backend::{Context, Facade};
-use glium::framebuffer::{DepthRenderBuffer, SimpleFrameBuffer};
+use glium::backend::Facade;
 use glium::uniforms::Uniforms;
-use glium::{uniform, DrawParameters, Program, Surface, Texture2d};
+use glium::{uniform, DrawParameters, Program, Surface};
 
 use crate::light::Light;
 use crate::mesh::{GPUMesh, Mesh};
 use crate::{Camera, Result};
 
-pub struct RenderBuffer {
-  texture: Texture2d,
-  depth: DepthRenderBuffer,
-}
-
-impl RenderBuffer {
-  fn new(facade: &impl Facade, width: u32, height: u32) -> Result<Self> {
-    let texture = Texture2d::empty(facade, width, height)?;
-    let depth = DepthRenderBuffer::new(
-      facade,
-      glium::texture::DepthFormat::F32,
-      width,
-      height,
-    )?;
-
-    Ok(Self { texture, depth })
-  }
-
-  fn framebuffer(&self, facade: &impl Facade) -> Result<SimpleFrameBuffer<'_>> {
-    let fb =
-      SimpleFrameBuffer::with_depth_buffer(facade, &self.texture, &self.depth)?;
-    Ok(fb)
-  }
-}
-
-pub struct IndirectScene {
-  pub camera: Camera,
-  pub light: Light,
-  pub objects: Vec<GPUObject>,
-  pub buffer: RenderBuffer,
-  context: Rc<Context>,
-}
-
-impl IndirectScene {
-  fn new(
-    facade: &impl Facade,
-    camera: Camera,
-    light: Light,
-    buffer: RenderBuffer,
-  ) -> Self {
-    Self {
-      camera,
-      light,
-      buffer,
-      objects: Vec::new(),
-      context: facade.get_context().clone(),
-    }
-  }
-
-  pub fn add_object(&mut self, object: GPUObject) {
-    self.objects.push(object);
-  }
-
-  pub fn render(&self) -> Result<&Texture2d> {
-    let mut fb = self.buffer.framebuffer(&self.context)?;
-
-    fb.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
-    for obj in &self.objects {
-      obj.draw(&mut fb, &self.camera, &self.light);
-    }
-
-    Ok(&self.buffer.texture)
-  }
-}
-
+#[allow(unused)]
 pub struct Teapot;
 
 impl Teapot {
@@ -92,27 +28,13 @@ impl Teapot {
 
     Ok(object)
   }
-
-  #[allow(dead_code)]
-  pub fn load_indirect_scene(facade: &impl Facade) -> Result<IndirectScene> {
-    let camera = Camera::new();
-    let light = Light::new();
-    let object = Self::load(facade)?;
-    let mut scene = IndirectScene::new(
-      facade,
-      camera,
-      light,
-      RenderBuffer::new(facade, 1024, 1024)?,
-    );
-    scene.add_object(object);
-
-    Ok(scene)
-  }
 }
 
+#[allow(unused)]
 pub struct Yoda;
 
 impl Yoda {
+  #[allow(unused)]
   pub fn load(facade: &impl Facade) -> Result<GPUObject> {
     const SHADER_PATH: &str =
       concat!(env!("CARGO_MANIFEST_DIR"), "/assets/shader");
@@ -125,21 +47,6 @@ impl Yoda {
       * Matrix4::from_angle_x(cgmath::Deg(-90.0));
 
     Ok(object)
-  }
-
-  pub fn load_indirect_scene(facade: &impl Facade) -> Result<IndirectScene> {
-    let camera = Camera::new();
-    let light = Light::new();
-    let object = Self::load(facade)?;
-    let mut scene = IndirectScene::new(
-      facade,
-      camera,
-      light,
-      RenderBuffer::new(facade, 1024, 1024)?,
-    );
-    scene.add_object(object);
-
-    Ok(scene)
   }
 }
 
@@ -189,14 +96,15 @@ impl GPUObject {
   }
 
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
-    self.draw_with_extra_uniforms(frame, camera, light, DynUniforms::new());
+    self.draw_raw(frame, camera, light, &self.program, DynUniforms::new());
   }
 
-  pub fn draw_with_extra_uniforms(
+  pub fn draw_raw(
     &self,
     frame: &mut impl Surface,
     camera: &Camera,
     light: &Light,
+    program: &Program,
     extra_uniforms: impl Uniforms,
   ) {
     let mv: Matrix4<f32> = camera.view() * self.model();
@@ -230,10 +138,24 @@ impl GPUObject {
       },
       ..Default::default()
     };
-    let program = &self.program;
     let uniforms = MergedUniform::new(&extra_uniforms, &uniforms);
 
     self.mesh.draw(frame, program, &uniforms, &draw_params);
+  }
+
+  pub fn world_pos(&self) -> Point3<f32> {
+    let v = self.model.w.truncate() / self.model.w.w;
+    Point3::new(v.x, v.y, v.z)
+  }
+
+  pub fn translated(self, d: [f32; 3]) -> Self {
+    let model = Matrix4::from_translation(d.into()) * self.model;
+    Self { model, ..self }
+  }
+
+  pub fn rotated_y(self, degree: f32) -> Self {
+    let model = Matrix4::from_angle_y(cgmath::Deg(degree)) * self.model;
+    Self { model, ..self }
   }
 }
 

@@ -1,12 +1,15 @@
+mod background;
 mod camera;
 mod light;
 mod mesh;
 mod object;
+mod reflective_object;
 mod scene;
 
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display};
+use object::Teapot;
 use scene::Scene;
 use winit::{
   dpi::PhysicalSize,
@@ -345,7 +348,7 @@ fn main() -> Result<()> {
   app.world.set_axis(axis);
 
   // setup the scene
-  let scene = Scene::new(
+  let mut scene = Scene::new(
     &app.display,
     &[
       &asset_path("cubemap/cubemap_posx.png"),
@@ -356,6 +359,19 @@ fn main() -> Result<()> {
       &asset_path("cubemap/cubemap_negz.png"),
     ],
   )?;
+
+  let teapot1 = Teapot::load(&app.display)?
+    .translated([-1.0, 0.0, 0.0])
+    .rotated_y(-45.0);
+  scene.add_object(teapot1, true)?;
+  let teapot2 = Teapot::load(&app.display)?
+    .rotated_y(45.0)
+    .translated([0.5, 0.0, 0.0]);
+  scene.add_object(teapot2, false)?;
+  let teapot3 = Teapot::load(&app.display)?
+    .translated([-0.3, 0.8, 0.0])
+    .rotated_y(90.0);
+  scene.add_object(teapot3, true)?;
   app.world.set_scene(scene);
 
   // initial update

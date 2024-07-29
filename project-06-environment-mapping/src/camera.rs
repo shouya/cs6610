@@ -28,6 +28,36 @@ impl Camera {
     }
   }
 
+  // sitting at a point, looking to a direction.
+  // point and direction are given in world space.
+  pub fn for_cubemap_face(
+    point: Point3<f32>,
+    dir: [i8; 3],
+    up: [i8; 3],
+  ) -> Self {
+    let up = Vector3::new(up[0] as f32, up[1] as f32, up[2] as f32);
+    let dir = Vector3::new(dir[0] as f32, dir[1] as f32, dir[2] as f32);
+
+    let m_view = Matrix4::look_to_rh(point, dir, up);
+
+    let m_proj = cgmath::perspective(cgmath::Deg(90.0), 1.0, 0.1, 100.0);
+    let m_view_proj = m_proj * m_view;
+
+    Self {
+      clear_color: [0.0, 0.0, 0.0, 1.0],
+      // these fields are all dummy. they are not used in this context.
+      aspect_ratio: 1.0,
+      distance: 0.0,
+      rotation: [0.0, 0.0],
+      perspective: true,
+
+      // only these fields can be safely used.
+      m_view,
+      m_proj,
+      m_view_proj,
+    }
+  }
+
   pub fn clear_color(&self) -> [f32; 4] {
     self.clear_color
   }
