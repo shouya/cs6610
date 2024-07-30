@@ -4,19 +4,21 @@ mod light;
 mod mesh;
 mod object;
 mod reflective_object;
+mod reflective_plane;
 mod scene;
 
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display};
-use object::Teapot;
+use object::{Plane, Teapot};
 use scene::Scene;
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
   event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
   keyboard::{ModifiersState, NamedKey},
-  window::{Window, WindowId},
+  platform::x11::WindowBuilderExtX11 as _,
+  window::{Window, WindowBuilder, WindowId},
 };
 
 use common::{asset_path, Axis};
@@ -53,6 +55,13 @@ impl World {
 
   fn set_scene(&mut self, scene: Scene) {
     self.scene = Some(scene);
+  }
+
+  fn handle_resize(&mut self, display: &Display<WindowSurface>) {
+    if let Some(scene) = &mut self.scene {
+      scene.handle_resize(display);
+      scene.camera.update_view();
+    }
   }
 
   fn update_view(&mut self) {
@@ -185,7 +194,7 @@ impl App {
     if let Some(scene) = &mut self.world.scene {
       scene.camera.handle_window_resize((size.width, size.height));
     }
-    self.world.update_view();
+    self.world.handle_resize(&self.display);
     self.window.request_redraw();
   }
 
@@ -337,7 +346,9 @@ fn main() -> Result<()> {
   let event_loop = EventLoopBuilder::with_user_event()
     .build()
     .expect("Failed to create event loop");
-  let window = Window::new(&event_loop)?;
+  let window = WindowBuilder::new()
+    .with_name("cs5610", env!("CARGO_BIN_NAME"))
+    .build(&event_loop)?;
   let display = common::gl_boilerplate::init_display(&window);
 
   let event_loop_proxy = event_loop.create_proxy();
@@ -372,6 +383,12 @@ fn main() -> Result<()> {
     .translated([-0.3, 0.8, 0.0])
     .rotated_y(90.0);
   scene.add_object(teapot3, true)?;
+
+  let plane = Plane::new(&app.display)?
+    .translated([0.0, -0.2, 0.0])
+    .scaled(1.2, 1.0, 1.0);
+  scene.add_plane(plane, true)?;
+
   app.world.set_scene(scene);
 
   // initial update

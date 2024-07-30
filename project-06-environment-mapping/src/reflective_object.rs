@@ -1,7 +1,7 @@
 use std::{cell::Cell, fs::read_to_string};
 
-use cgmath::SquareMatrix as _;
-use common::project_asset_path;
+use cgmath::{Point3, SquareMatrix as _, Vector3};
+use common::{math, project_asset_path};
 use glium::{
   backend::Facade,
   framebuffer::SimpleFrameBuffer,
@@ -43,7 +43,8 @@ impl ReflectiveObject {
   pub fn shader(facade: &impl Facade) -> Result<Program> {
     // reuse the same vertex shader for normal objects
     let vert_src = read_to_string(project_asset_path!("shader.vert"))?;
-    let frag_src = read_to_string(project_asset_path!("reflective.frag"))?;
+    let frag_src =
+      read_to_string(project_asset_path!("reflective_object.frag"))?;
     let program = Program::from_source(facade, &vert_src, &frag_src, None)?;
     Ok(program)
   }
@@ -86,6 +87,7 @@ impl ReflectiveObject {
     face_id: usize,
     scene: &Scene,
   ) -> Result<()> {
+    // reference: https://www.khronos.org/opengl/wiki/Cubemap_Texture
     let layers = [
       (CubeLayer::PositiveX, [1, 0, 0], [0, -1, 0]),
       (CubeLayer::NegativeX, [-1, 0, 0], [0, -1, 0]),
@@ -102,6 +104,8 @@ impl ReflectiveObject {
       SimpleFrameBuffer::with_depth_buffer(facade, image, &self.cubemap_depth)?;
 
     let world_pos = self.object.world_pos();
+    // object size
+    let dims = self.object.dimensions();
     let camera = Camera::for_cubemap_face(world_pos, direction, up);
 
     scene.draw_with_camera(
@@ -125,7 +129,8 @@ impl ReflectiveObject {
       .wrap_function(glium::uniforms::SamplerWrapFunction::Repeat)
       .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear);
-    let view_inv: [[f32; 4]; 4] = camera.view().invert().unwrap().into();
+    let view_inv: [[f32; 3]; 3] =
+      math::mat4_to_3(camera.view()).invert().unwrap().into();
     let uniforms = uniform! {
       use_cubemap: 1u32,
       cubemap: cubemap,

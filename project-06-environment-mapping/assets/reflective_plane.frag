@@ -29,11 +29,8 @@ uniform uint use_map_Kd, use_map_Ks, use_map_Ka;
 uniform vec3 light_pos;
 uniform vec3 light_color;
 
-// cube map for reflective material
-uniform samplerCube cubemap;
-uniform uint use_cubemap;
-
-uniform mat4 view_inv;
+// world texture
+uniform sampler2D world_texture;
 
 void main() {
   vec3 n_v = normalize(n_v);
@@ -46,32 +43,26 @@ void main() {
   vec3 h = normalize(light_dir + view_dir);
   float spec = pow(max(dot(n_v, h), 0.0), Ns * 100);
 
-  // reflected view direction
-  vec3 refl_dir = reflect(-view_dir, n_v);
-  vec3 refl_dir_w = (view_inv * vec4(refl_dir, 0.0)).xyz;
+  // coordinates in view port
+  vec2 uv = gl_FragCoord.xy;
+  vec3 Kr = texture(world_texture, uv).rgb;
 
-  vec3 oKd = vec3(0.0);
-  if (use_cubemap == 1u) {
-    oKd += texture(cubemap, refl_dir_w).rgb * Kd;
-  } else if (use_map_Kd == 1u) {
+  vec3 oKd = vec3(0.05);
+  if (use_map_Kd == 1u) {
     oKd += texture(map_Kd, uv_t).rgb * Kd;
   } else {
     oKd += Kd;
   }
 
-  vec3 oKs = vec3(0.0);;
-  if (use_cubemap == 1u) {
-    oKs = texture(cubemap, refl_dir_w).rgb * Ks;
-  } else if (use_map_Ks == 1u) {
+  vec3 oKs = vec3(0.001);;
+  if (use_map_Ks == 1u) {
     oKs += texture(map_Ks, uv_t).rgb * Ks;
   } else {
     oKs += Ks;
   }
 
-  vec3 oKa = vec3(0.0);;
-  if (use_cubemap == 1u) {
-    oKa += texture(cubemap, refl_dir_w).rgb * Ka;
-  } else if (use_map_Ka == 1u) {
+  vec3 oKa = vec3(0.1);;
+  if (use_map_Ka == 1u) {
     oKa += texture(map_Ka, uv_t).rgb * Ka;
   } else {
     oKa += Ka;

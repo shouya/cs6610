@@ -7,7 +7,8 @@ use glium::{
 
 use crate::{
   background::Background, camera::Camera, light::Light, object::GPUObject,
-  reflective_object::ReflectiveObject, Result,
+  reflective_object::ReflectiveObject, reflective_plane::ReflectivePlane,
+  Result,
 };
 
 pub struct Scene {
@@ -15,6 +16,7 @@ pub struct Scene {
   pub light: Light,
   objects: Vec<GPUObject>,
   reflective_objects: Vec<ReflectiveObject>,
+  reflective_planes: Vec<ReflectivePlane>,
   background: Background,
   // context is used to create framebuffers for updating the cubemap
   // without access to the Display.
@@ -33,6 +35,7 @@ impl Scene {
       light,
       objects: vec![],
       reflective_objects: vec![],
+      reflective_planes: vec![],
       background,
       context,
     })
@@ -53,6 +56,21 @@ impl Scene {
     Ok(())
   }
 
+  pub fn add_plane(
+    &mut self,
+    object: GPUObject,
+    reflective: bool,
+  ) -> Result<()> {
+    if reflective {
+      self
+        .reflective_planes
+        .push(ReflectivePlane::new(&self.context, object)?);
+    } else {
+      self.objects.push(object);
+    }
+    Ok(())
+  }
+
   pub fn reload_shader(&mut self, facade: &impl Facade) -> Result<()> {
     // TODO: reload shader for background as well
     self.background.reload_shader(facade)?;
@@ -63,21 +81,14 @@ impl Scene {
     for obj in &mut self.reflective_objects {
       obj.reload_shader(facade)?;
     }
+    for plane in &mut self.reflective_planes {
+      plane.reload_shader(facade)?;
+    }
     Ok(())
   }
 
   pub fn draw(&self, target: &mut impl Surface) {
-    target.clear_color_and_depth(self.camera.clear_color().into(), 1.0);
-
-    for obj in &self.objects {
-      obj.draw(target, &self.camera, &self.light);
-    }
-
-    for obj in &self.reflective_objects {
-      obj.draw(target, &self.camera, &self.light);
-    }
-
-    self.background.draw(target, &self.camera);
+    self.draw_with_camera(target, &self.camera, std::ptr::null());
   }
 
   pub fn draw_with_camera(
@@ -105,6 +116,13 @@ impl Scene {
       obj.draw(target, camera, &self.light);
     }
 
+    for plane in &self.reflective_planes {
+      if plane as *const _ as *const c_void == skip_obj {
+        continue;
+      }
+      plane.draw(target, camera, &self.light);
+    }
+
     self.background.draw(target, camera);
   }
 
@@ -114,15 +132,36 @@ impl Scene {
       obj.update(dt);
     }
 
-    match self.update_cubemap() {
+    match self.update_cubemaps() {
       Ok(_) => {}
       Err(e) => eprintln!("Failed to update cubemap: {}", e),
     }
+
+    match self.update_world_textures() {
+      Ok(_) => {}
+      Err(e) => eprintln!("Failed to update world textures: {}", e),
+    }
   }
 
-  pub fn update_cubemap(&self) -> Result<()> {
+  pub fn handle_resize(&mut self, facade: &impl Facade) {
+    let new_size = facade.get_context().get_framebuffer_dimensions();
+    self.camera.handle_window_resize(new_size);
+
+    for plane in &mut self.reflective_planes {
+      plane.handle_resize(facade, new_size);
+    }
+  }
+
+  pub fn update_cubemaps(&self) -> Result<()> {
     for obj in &self.reflective_objects {
       obj.update_cubemap(&self.context, self)?;
+    }
+    Ok(())
+  }
+
+  pub fn update_world_textures(&self) -> Result<()> {
+    for plane in &self.reflective_planes {
+      plane.update_world_texture(&self.context, self, &self.camera)?;
     }
     Ok(())
   }

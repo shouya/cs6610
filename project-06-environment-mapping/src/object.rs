@@ -50,25 +50,82 @@ impl Yoda {
   }
 }
 
+pub struct Plane;
+
+impl Plane {
+  pub fn new(facade: &impl Facade) -> Result<GPUObject> {
+    let plane = genmesh::generators::Plane::new();
+    let mesh = Mesh::from_genmesh(plane).upload(facade)?;
+    let model = Matrix4::from_angle_x(cgmath::Deg(-90.0));
+    let object = GPUObject {
+      shader_path: None,
+      program: None,
+      mesh,
+      model,
+    };
+    Ok(object)
+  }
+}
+
 pub struct GPUObject {
-  shader_path: PathBuf,
-  program: Program,
+  shader_path: Option<PathBuf>,
+  program: Option<Program>,
   mesh: GPUMesh,
   model: Matrix4<f32>,
 }
 
 impl GPUObject {
   pub fn reload_shader(&mut self, facade: &impl Facade) -> Result<()> {
-    let shader_path = &self.shader_path;
+    let Some(shader_path) = &self.shader_path else {
+      return Ok(());
+    };
 
     match load_program(shader_path, facade) {
-      Ok(program) => self.program = program,
+      Ok(program) => self.program = Some(program),
       Err(e) => {
         eprintln!("Failed to reload shader: {}", e);
       }
     }
 
     Ok(())
+  }
+
+  // world space
+  pub fn dimensions(&self) -> [f32; 3] {
+    let [[xmin, xmax], [ymin, ymax], [zmin, zmax]] = self.bounding_box();
+    let dx = xmax - xmin;
+    let dy = ymax - ymin;
+    let dz = zmax - zmin;
+    [dx, dy, dz]
+  }
+
+  // world space
+  pub fn bounding_box(&self) -> [[f32; 2]; 3] {
+    let [[x1, x2], [y1, y2], [z1, z2]] = self.mesh.bounding_box();
+    let vertices = [
+      [x1, y1, z1],
+      [x1, y1, z2],
+      [x1, y2, z1],
+      [x1, y2, z2],
+      [x2, y1, z1],
+      [x2, y1, z2],
+      [x2, y2, z1],
+      [x2, y2, z2],
+    ];
+
+    let (mut xmin, mut ymin, mut zmin) = (f32::MAX, f32::MAX, f32::MAX);
+    let (mut xmax, mut ymax, mut zmax) = (f32::MIN, f32::MIN, f32::MIN);
+
+    for [x, y, z] in vertices {
+      xmin = xmin.min(x);
+      ymin = ymin.min(y);
+      zmin = zmin.min(z);
+      xmax = xmax.max(x);
+      ymax = ymax.max(y);
+      zmax = zmax.max(z);
+    }
+
+    [[xmin, xmax], [ymin, ymax], [zmin, zmax]]
   }
 
   pub fn load(
@@ -78,11 +135,13 @@ impl GPUObject {
   ) -> Result<Self> {
     let mesh = Mesh::load(obj_path)?;
     let mesh = mesh.upload(facade)?;
-    let program = load_program(shader_path.as_ref(), facade)?;
+    let shader_path = shader_path.as_ref().to_path_buf();
+    let program = Some(load_program(&shader_path, facade)?);
+    let shader_path = Some(shader_path);
     let model = Matrix4::identity();
 
     Ok(Self {
-      shader_path: shader_path.as_ref().to_path_buf(),
+      shader_path,
       program,
       mesh,
       model,
@@ -96,7 +155,11 @@ impl GPUObject {
   }
 
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
-    self.draw_raw(frame, camera, light, &self.program, DynUniforms::new());
+    if let Some(program) = &self.program {
+      self.draw_raw(frame, camera, light, program, DynUniforms::new());
+    } else {
+      eprintln!("GPUObject::draw: program is not loaded");
+    }
   }
 
   pub fn draw_raw(
@@ -108,11 +171,7 @@ impl GPUObject {
     extra_uniforms: impl Uniforms,
   ) {
     let mv: Matrix4<f32> = camera.view() * self.model();
-    let mv3: Matrix3<f32> = Matrix3 {
-      x: mv.x.truncate(),
-      y: mv.y.truncate(),
-      z: mv.z.truncate(),
-    };
+    let mv3: Matrix3<f32> = common::math::mat4_to_3(mv);
     let mv_n: Matrix3<f32> = mv3.invert().unwrap().transpose();
     let mvp: Matrix4<f32> = camera.projection() * mv;
 
@@ -136,6 +195,8 @@ impl GPUObject {
         write: true,
         ..Default::default()
       },
+      backface_culling:
+        glium::draw_parameters::BackfaceCullingMode::CullClockwise,
       ..Default::default()
     };
     let uniforms = MergedUniform::new(&extra_uniforms, &uniforms);
@@ -144,8 +205,8 @@ impl GPUObject {
   }
 
   pub fn world_pos(&self) -> Point3<f32> {
-    let v = self.model.w.truncate() / self.model.w.w;
-    Point3::new(v.x, v.y, v.z)
+    let d = self.model.w.truncate() / self.model.w.w;
+    Point3::new(d.x, d.y, d.z)
   }
 
   pub fn translated(self, d: [f32; 3]) -> Self {
@@ -155,6 +216,11 @@ impl GPUObject {
 
   pub fn rotated_y(self, degree: f32) -> Self {
     let model = Matrix4::from_angle_y(cgmath::Deg(degree)) * self.model;
+    Self { model, ..self }
+  }
+
+  pub fn scaled(self, sx: f32, sy: f32, sz: f32) -> Self {
+    let model = Matrix4::from_nonuniform_scale(sx, sy, sz) * self.model;
     Self { model, ..self }
   }
 }

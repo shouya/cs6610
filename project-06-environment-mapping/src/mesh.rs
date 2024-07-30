@@ -64,7 +64,6 @@ impl Mesh {
     Ok(Self::from_obj(obj))
   }
 
-  #[allow(unused)]
   pub fn from_genmesh<S, P>(shape: S) -> Self
   where
     S: genmesh::generators::SharedVertex<genmesh::Vertex>,
@@ -170,12 +169,14 @@ impl Mesh {
       })
       .collect::<Result<HashMap<_, _>>>()?;
     let groups = self.groups.clone();
+    let bounding_box = calc_bounding_box(&self.vertices);
 
     Ok(GPUMesh {
       vbo,
       ibo,
       groups,
       mtls,
+      bounding_box,
     })
   }
 }
@@ -302,6 +303,7 @@ pub struct GPUMesh {
   ibo: glium::IndexBuffer<u32>,
   groups: Vec<Group>,
   mtls: HashMap<String, GPUMtl>,
+  bounding_box: [[f32; 2]; 3],
 }
 
 impl GPUMesh {
@@ -330,6 +332,19 @@ impl GPUMesh {
           .expect("Failed to draw");
       }
     }
+  }
+
+  pub fn bounding_box(&self) -> [[f32; 2]; 3] {
+    self.bounding_box
+  }
+
+  pub fn center(&self) -> [f32; 3] {
+    let [[xmin, xmax], [ymin, ymax], [zmin, zmax]] = self.bounding_box;
+    [
+      (xmin + xmax) / 2.0,
+      (ymin + ymax) / 2.0,
+      (zmin + zmax) / 2.0,
+    ]
   }
 }
 
@@ -368,4 +383,21 @@ fn upload_texture(facade: &impl Facade, image: &RgbImage) -> Texture2d {
   let texture = Texture2d::new(facade, to_raw_image(image)).unwrap();
   unsafe { texture.generate_mipmaps() };
   texture
+}
+
+fn calc_bounding_box(vertices: &[Vertex]) -> [[f32; 2]; 3] {
+  let (mut xmin, mut ymin, mut zmin) = (f32::MAX, f32::MAX, f32::MAX);
+  let (mut xmax, mut ymax, mut zmax) = (f32::MIN, f32::MIN, f32::MIN);
+
+  for v in vertices {
+    let [x, y, z] = v.pos;
+    xmin = xmin.min(x);
+    ymin = ymin.min(y);
+    zmin = zmin.min(z);
+    xmax = xmax.max(x);
+    ymax = ymax.max(y);
+    zmax = zmax.max(z);
+  }
+
+  [[xmin, xmax], [ymin, ymax], [zmin, zmax]]
 }

@@ -16,11 +16,6 @@ uniform uint use_map_bump;
 
 void main()
 {
-  vec3 pos = pos;
-  if (use_map_bump == 1u) {
-    pos += n * texture(map_bump, uv).x;
-  }
-
   gl_Position = mvp * vec4(pos, 1.0);
 
   pos_v = (mv * vec4(pos, 1.0)).xyz;
