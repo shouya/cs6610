@@ -1,6 +1,7 @@
 pub mod axis;
 pub mod gl_boilerplate;
 mod glium_helper;
+pub mod math;
 pub mod mesh;
 pub mod obj_loader;
 

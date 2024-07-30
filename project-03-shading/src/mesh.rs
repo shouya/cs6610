@@ -230,6 +230,12 @@ impl From<&TriangleIndex> for TriangleStrip {
       }
       indices.extend_from_slice(&strip);
 
+      if indices.len() % 2 == 1 {
+        // to fix the orientation bug
+        // https://www.codercorner.com/Strips.htm
+        indices.extend_from_within(indices.len() - 1..);
+      }
+
       let end = indices.len();
       ranges.push((begin..end, rand_color()));
     }
@@ -284,7 +290,7 @@ impl GPUMeshFormat for TriangleStripGPU {
     uniforms: &impl Uniforms,
     params: &DrawParameters<'_>,
   ) {
-    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() == Ok("1") {
+    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() != Ok("1") {
       frame
         .draw(&self.vbo, &self.ibo, &self.program, uniforms, params)
         .expect("Failed to draw");

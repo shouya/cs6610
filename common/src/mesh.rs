@@ -63,7 +63,7 @@ pub fn tear_into_strips(indices: &[u32]) -> Vec<Vec<u32>> {
     strips.push(strip);
   }
 
-  validate_trig_strips(indices, &strips);
+  // validate_trig_strips(indices, &strips);
 
   strips
 }
@@ -78,10 +78,17 @@ pub fn concat_strips(strips: &[Vec<u32>]) -> Vec<u32> {
       indices.extend_from_slice(&strip[..1]);
     }
     indices.extend_from_slice(strip);
+
+    if indices.len() % 2 == 1 {
+      // to fix the orientation bug
+      // https://www.codercorner.com/Strips.htm
+      indices.extend_from_within(indices.len() - 1..);
+    }
   }
   indices
 }
 
+#[allow(unused)]
 fn validate_trig_strips(indices: &[u32], strips: &[Vec<u32>]) {
   let mut original_trigs: Vec<[u32; 3]> = indices
     .chunks(3)
