@@ -384,7 +384,7 @@ fn main() -> Result<()> {
     .rotated_y(90.0);
   scene.add_object(teapot3, true)?;
 
-  let plane = Plane::new(&app.display)?
+  let plane = Plane::create(&app.display)?
     .translated([0.0, -0.2, 0.0])
     .scaled(1.2, 1.0, 1.0);
   scene.add_plane(plane, true)?;

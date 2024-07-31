@@ -1,6 +1,6 @@
 use std::{cell::Cell, fs::read_to_string};
 
-use cgmath::{Point3, SquareMatrix as _, Vector3};
+use cgmath::SquareMatrix as _;
 use common::{math, project_asset_path};
 use glium::{
   backend::Facade,
@@ -105,8 +105,7 @@ impl ReflectiveObject {
 
     let world_pos = self.object.world_pos();
     // object size
-    let dims = self.object.dimensions();
-    let camera = Camera::for_cubemap_face(world_pos, direction, up);
+    let camera = Camera::for_cubemap_face(world_pos, direction, up, false);
 
     scene.draw_with_camera(
       &mut framebuffer,
@@ -137,8 +136,12 @@ impl ReflectiveObject {
       view_inv: view_inv,
     };
 
-    self
-      .object
-      .draw_raw(target, camera, light, &self.program, uniforms);
+    self.object.draw_with_program(
+      target,
+      camera,
+      light,
+      &self.program,
+      uniforms,
+    );
   }
 }

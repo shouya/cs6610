@@ -44,29 +44,13 @@ void main() {
   float spec = pow(max(dot(n_v, h), 0.0), Ns * 100);
 
   // coordinates in view port
-  vec2 uv = gl_FragCoord.xy;
-  vec3 Kr = texture(world_texture, uv).rgb;
+  vec2 uv = gl_FragCoord.xy + vec2(2.0);
+  vec3 K = texelFetch(world_texture, ivec2(uv), 0).rgb;
 
-  vec3 oKd = vec3(0.05);
-  if (use_map_Kd == 1u) {
-    oKd += texture(map_Kd, uv_t).rgb * Kd;
-  } else {
-    oKd += Kd;
-  }
+  vec3 oKd = vec3(0.1);
+  vec3 oKa = K * 0.5;
 
-  vec3 oKs = vec3(0.001);;
-  if (use_map_Ks == 1u) {
-    oKs += texture(map_Ks, uv_t).rgb * Ks;
-  } else {
-    oKs += Ks;
-  }
+  color = vec4(K * 0.9, 1.0);
 
-  vec3 oKa = vec3(0.1);;
-  if (use_map_Ka == 1u) {
-    oKa += texture(map_Ka, uv_t).rgb * Ka;
-  } else {
-    oKa += Ka;
-  }
-
-  color = vec4(light_color * (geom * oKd + spec * oKs) + oKa, 1.0);
+  // color = vec4(light_color * geom * oKd + oKa, 1.0);
 }

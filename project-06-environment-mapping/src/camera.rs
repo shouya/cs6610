@@ -1,4 +1,5 @@
 use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
+use glium::Rect;
 
 pub struct Camera {
   clear_color: [f32; 4],
@@ -7,10 +8,13 @@ pub struct Camera {
   distance: f32,
   rotation: [f32; 2],
   perspective: bool,
+  // only draw within this rectangle (window space)
+  scissor: Option<Rect>,
   // cached matrices
   m_view: Matrix4<f32>,
   m_proj: Matrix4<f32>,
   m_view_proj: Matrix4<f32>,
+  mirror: bool,
 }
 
 impl Camera {
@@ -20,11 +24,37 @@ impl Camera {
       aspect_ratio: 1.0,
       distance: 2.0,
       rotation: [0.0, 0.0],
+      scissor: None,
       perspective: true,
 
       m_view: Matrix4::identity(),
       m_proj: Matrix4::identity(),
       m_view_proj: Matrix4::identity(),
+      mirror: false,
+    }
+  }
+
+  pub fn from_view_projection(
+    view: Matrix4<f32>,
+    proj: Matrix4<f32>,
+    mirror: bool,
+  ) -> Self {
+    let m_view_proj = proj * view;
+
+    Self {
+      // all unused
+      clear_color: [0.0, 0.0, 0.0, 1.0],
+      aspect_ratio: 1.0,
+      distance: 0.0,
+      rotation: [0.0, 0.0],
+      perspective: true,
+      scissor: None,
+
+      // actually used
+      m_view: view,
+      m_proj: proj,
+      m_view_proj,
+      mirror,
     }
   }
 
@@ -34,6 +64,7 @@ impl Camera {
     point: Point3<f32>,
     dir: [i8; 3],
     up: [i8; 3],
+    mirror: bool,
   ) -> Self {
     let up = Vector3::new(up[0] as f32, up[1] as f32, up[2] as f32);
     let dir = Vector3::new(dir[0] as f32, dir[1] as f32, dir[2] as f32);
@@ -50,12 +81,26 @@ impl Camera {
       distance: 0.0,
       rotation: [0.0, 0.0],
       perspective: true,
+      scissor: None,
 
       // only these fields can be safely used.
       m_view,
       m_proj,
       m_view_proj,
+      mirror,
     }
+  }
+
+  pub fn mirror(&self) -> bool {
+    self.mirror
+  }
+
+  pub fn scissor(&self) -> Option<Rect> {
+    self.scissor
+  }
+
+  pub fn set_scissor(&mut self, scissor: Rect) {
+    self.scissor = Some(scissor);
   }
 
   pub fn clear_color(&self) -> [f32; 4] {

@@ -53,7 +53,7 @@ impl Yoda {
 pub struct Plane;
 
 impl Plane {
-  pub fn new(facade: &impl Facade) -> Result<GPUObject> {
+  pub fn create(facade: &impl Facade) -> Result<GPUObject> {
     let plane = genmesh::generators::Plane::new();
     let mesh = Mesh::from_genmesh(plane).upload(facade)?;
     let model = Matrix4::from_angle_x(cgmath::Deg(-90.0));
@@ -91,6 +91,7 @@ impl GPUObject {
   }
 
   // world space
+  #[allow(unused)]
   pub fn dimensions(&self) -> [f32; 3] {
     let [[xmin, xmax], [ymin, ymax], [zmin, zmax]] = self.bounding_box();
     let dx = xmax - xmin;
@@ -102,7 +103,7 @@ impl GPUObject {
   // world space
   pub fn bounding_box(&self) -> [[f32; 2]; 3] {
     let [[x1, x2], [y1, y2], [z1, z2]] = self.mesh.bounding_box();
-    let vertices = [
+    let mut vertices = [
       [x1, y1, z1],
       [x1, y1, z2],
       [x1, y2, z1],
@@ -112,6 +113,10 @@ impl GPUObject {
       [x2, y2, z1],
       [x2, y2, z2],
     ];
+
+    for vert in &mut vertices {
+      *vert = self.model.transform_point((*vert).into()).into();
+    }
 
     let (mut xmin, mut ymin, mut zmin) = (f32::MAX, f32::MAX, f32::MAX);
     let (mut xmax, mut ymax, mut zmax) = (f32::MIN, f32::MIN, f32::MIN);
@@ -156,13 +161,13 @@ impl GPUObject {
 
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
     if let Some(program) = &self.program {
-      self.draw_raw(frame, camera, light, program, DynUniforms::new());
+      self.draw_with_program(frame, camera, light, program, DynUniforms::new());
     } else {
       eprintln!("GPUObject::draw: program is not loaded");
     }
   }
 
-  pub fn draw_raw(
+  pub fn draw_with_program(
     &self,
     frame: &mut impl Surface,
     camera: &Camera,
@@ -188,18 +193,24 @@ impl GPUObject {
       light_pos: light_pos,
       light_color: light.color(),
     };
+    let uniforms = MergedUniform::new(&extra_uniforms, &uniforms);
 
+    let scissor = camera.scissor();
+    let culling = if camera.mirror() {
+      glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise
+    } else {
+      glium::draw_parameters::BackfaceCullingMode::CullClockwise
+    };
     let draw_params = DrawParameters {
       depth: glium::Depth {
         test: glium::draw_parameters::DepthTest::IfLess,
         write: true,
         ..Default::default()
       },
-      backface_culling:
-        glium::draw_parameters::BackfaceCullingMode::CullClockwise,
+      backface_culling: culling,
+      scissor,
       ..Default::default()
     };
-    let uniforms = MergedUniform::new(&extra_uniforms, &uniforms);
 
     self.mesh.draw(frame, program, &uniforms, &draw_params);
   }

@@ -338,6 +338,7 @@ impl GPUMesh {
     self.bounding_box
   }
 
+  #[allow(dead_code)]
   pub fn center(&self) -> [f32; 3] {
     let [[xmin, xmax], [ymin, ymax], [zmin, zmax]] = self.bounding_box;
     [
