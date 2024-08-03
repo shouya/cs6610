@@ -1,0 +1,31 @@
+My implementation for the 6th project. The project renders three teapots (one normal + two reflective), plus a reflective plane with animated ripples.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=6
+
+All CS6610 and optional requirements implemented. In addition, I have implemented the following optimizations:
+
+- Gradual cubemap update trick: In each frame only one face of the cube-map is updated.
+  + The computation becomes 1/6 at a small cost of latency
+  + Recursive reflection is also functioning.
+- The reflection on the plane is physically accurate that includes other objects.
+- The reflected scene rendered in the reflective plane's internal texture only will render the necessary part used by the plane.
+- Backface culling working as expected.
+
+Controls:
+
+left drag: rotate camera
+right drag/wheel: change camera distance
+
+shift+left drag: rotate camera in the indirect scene (yoda)
+shift+right drag/shift+wheel: change camera distance in the indirect scene (yoda)
+
+(I didn't use alt modifier because alt+<key> is reserved by my X window manager).
+
+p: perspective/orthographic projection
+a: show/hide axis
+f6, r: reload shader
+esc: quit
+
+Environments:
+
+- SLOW_CUBEMAP_UPDATE=1: slow down cubemap updating to ~1/10 of original frequency to allow you more clearly notice the latency.

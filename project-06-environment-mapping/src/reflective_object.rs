@@ -1,4 +1,4 @@
-use std::{cell::Cell, fs::read_to_string};
+use std::{cell::Cell, fs::read_to_string, time::Duration};
 
 use cgmath::SquareMatrix as _;
 use common::{math, project_asset_path};
@@ -143,5 +143,9 @@ impl ReflectiveObject {
       &self.program,
       uniforms,
     );
+  }
+
+  pub fn update(&mut self, dt: &Duration) {
+    self.object.update(dt);
   }
 }

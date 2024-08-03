@@ -6,6 +6,8 @@ in vec2 uv_t; // in texture space
 in vec3 pos_v; // in view space
 in vec3 n_v; // in view space
 
+in vec3 orig_pos; // in model space
+
 // diffuse, specular, ambient
 uniform vec3 Kd, Ks, Ka;
 uniform float Ns; // shininess
@@ -32,6 +34,9 @@ uniform vec3 light_color;
 // world texture
 uniform sampler2D world_texture;
 
+// time, used for animating the ripple effect.
+uniform float t;
+
 void main() {
   vec3 n_v = normalize(n_v);
   vec3 light_dir = normalize(light_pos - pos_v);
@@ -41,16 +46,15 @@ void main() {
 
   // half vector
   vec3 h = normalize(light_dir + view_dir);
-  float spec = pow(max(dot(n_v, h), 0.0), Ns * 100);
+  float spec = pow(max(dot(n_v, h), 0.0), Ns);
 
-  // coordinates in view port
-  vec2 uv = gl_FragCoord.xy + vec2(2.0);
-  vec3 K = texelFetch(world_texture, ivec2(uv), 0).rgb;
+  // ripple effect
+  float amplitude = sin(-t * 10.0 + length(orig_pos.xy) * 30.0);
+  vec2 offset = amplitude * view_dir.xy * 100.0;
 
-  vec3 oKd = vec3(0.1);
-  vec3 oKa = K * 0.5;
+  // // coordinates in view port
+  vec2 uv_k = gl_FragCoord.xy + offset;
+  vec3 K = texelFetch(world_texture, ivec2(uv_k), 0).rgb;
 
   color = vec4(K * 0.9, 1.0);
-
-  // color = vec4(light_color * geom * oKd + oKa, 1.0);
 }

@@ -1,5 +1,5 @@
 use core::f32;
-use std::{ffi::c_void, fs::read_to_string};
+use std::{ffi::c_void, fs::read_to_string, time::Duration};
 
 use cgmath::{InnerSpace, Matrix4, Transform, Vector3};
 use common::{math::reflect4x4, project_asset_path};
@@ -18,6 +18,7 @@ pub struct ReflectivePlane {
   program: Program,
   texture: Texture2d,
   depth: DepthTexture2d,
+  t: f32,
 }
 
 impl ReflectivePlane {
@@ -37,6 +38,7 @@ impl ReflectivePlane {
       program,
       texture,
       depth,
+      t: 0.0,
     })
   }
 
@@ -112,6 +114,12 @@ impl ReflectivePlane {
     Ok(())
   }
 
+  pub fn update(&mut self, dt: &Duration) {
+    self.object.update(dt);
+
+    self.t += dt.as_secs_f32();
+  }
+
   pub fn draw(
     &self,
     target: &mut impl Surface,
@@ -129,6 +137,7 @@ impl ReflectivePlane {
 
     let uniforms = uniform! {
       world_texture: world_texture,
+      t: self.t,
     };
 
     self.object.draw_with_program(

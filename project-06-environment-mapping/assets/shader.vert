@@ -8,6 +8,8 @@ out vec2 uv_t; // in texture space
 out vec3 pos_v; // in view space
 out vec3 n_v; // in view space
 
+out vec3 orig_pos; // in model space
+
 uniform mat4 mv, mvp;
 uniform mat3 mv3, mv_n; // for transforming vertex normals
 
@@ -16,6 +18,7 @@ uniform uint use_map_bump;
 
 void main()
 {
+  orig_pos = pos;
   gl_Position = mvp * vec4(pos, 1.0);
 
   pos_v = (mv * vec4(pos, 1.0)).xyz;

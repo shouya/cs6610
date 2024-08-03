@@ -132,6 +132,14 @@ impl Scene {
       obj.update(dt);
     }
 
+    for obj in &mut self.reflective_objects {
+      obj.update(dt);
+    }
+
+    for plane in &mut self.reflective_planes {
+      plane.update(dt);
+    }
+
     match self.update_cubemaps() {
       Ok(_) => {}
       Err(e) => eprintln!("Failed to update cubemap: {}", e),

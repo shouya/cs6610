@@ -218,7 +218,9 @@ impl App {
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
       self.window.request_redraw();
-    } else if event.logical_key == NamedKey::F6 {
+    } else if event.logical_key == NamedKey::F6
+      || event.logical_key.to_text() == Some("r")
+    {
       if let Some(scene) = &mut self.world.scene {
         match scene.reload_shader(&self.display) {
           Ok(_) => println!("Reloaded shaders"),
@@ -249,16 +251,19 @@ impl App {
   }
 
   fn handle_idle(&mut self) {
-    self.world.update(self.last_update.elapsed());
-    self.last_update = std::time::Instant::now();
+    let new_now = std::time::Instant::now();
+    let dt = self.last_update.elapsed();
+    self.world.update(dt);
+    self.last_update = new_now;
 
     let help =
       "Press 'p' to toggle perspective, 'a' to toggle axis, Esc to quit";
 
-    let elapsed = self.boot_time.elapsed().as_secs_f32();
-    self
-      .window
-      .set_title(&format!("Elapsed: {:.2}s ({help})", elapsed));
+    self.window.set_title(&format!(
+      "ups: {:.2} ({})",
+      1.0 / dt.as_secs_f32(),
+      help
+    ));
 
     self.window.request_redraw();
   }
