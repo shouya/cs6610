@@ -1,0 +1,16 @@
+[package]
+name = "project-07-shadow-mapping"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+
+glium = { workspace = true }
+winit = { workspace = true }
+cgmath = { workspace = true }
+image = { workspace = true }
+anyhow = { workspace = true }
+genmesh = { workspace = true }
+derive_more = "0.99.18"
+rand = "0.8.5"

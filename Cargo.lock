@@ -1425,6 +1425,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "project-07-shadow-mapping"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cgmath 0.18.0",
+ "common",
+ "derive_more",
+ "genmesh",
+ "glium",
+ "image",
+ "rand 0.8.5",
+ "winit",
+]
+
+[[package]]
 name = "qoi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

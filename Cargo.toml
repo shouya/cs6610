@@ -11,7 +11,8 @@ members = [
   "project-03-shading",
   "project-04-textures",
   "project-05-render-buffers",
-  "project-06-environment-mapping"
+  "project-06-environment-mapping",
+  "project-07-shadow-mapping"
 ]
 
 [workspace.dependencies]
