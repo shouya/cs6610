@@ -1,8 +1,14 @@
+mod camera;
+mod light;
+mod mesh;
+mod object;
+mod scene;
 mod transform;
 
 use std::{fmt::Debug, time::Duration};
 
-use glium::{glutin::surface::WindowSurface, Display};
+use glium::{glutin::surface::WindowSurface, Display, Surface as _};
+use scene::Scene;
 use winit::{
   dpi::PhysicalSize,
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -13,6 +19,11 @@ use winit::{
 };
 
 use common::Axis;
+
+pub use camera::{Camera, Projection};
+pub use light::Light;
+pub use object::{Object, Teapot};
+pub use transform::Transform;
 
 type Result<T> = anyhow::Result<T>;
 
@@ -25,7 +36,7 @@ struct World {
   t: f32,
   show_axis: bool,
   axis: Option<Axis>,
-  // scene: Option<Scene>,
+  scene: Option<Scene>,
 }
 
 impl World {
@@ -34,6 +45,7 @@ impl World {
       t: 0.0,
       axis: None,
       show_axis: true,
+      scene: None,
     }
   }
 
@@ -41,29 +53,30 @@ impl World {
     self.axis = Some(axis);
   }
 
-  // fn set_scene(&mut self, scene: Scene) {
-  //   self.scene = Some(scene);
-  // }
+  fn set_scene(&mut self, scene: Scene) {
+    self.scene = Some(scene);
+  }
 
-  fn handle_resize(&mut self, display: &Display<WindowSurface>) {
-    // if let Some(scene) = &mut self.scene {
-    //   scene.handle_resize(display);
-    //   scene.camera.update_view();
-    // }
+  fn handle_resize(&mut self, width: u32, height: u32) {
+    if let Some(scene) = &mut self.scene {
+      scene.handle_resize(width as f32, height as f32);
+    }
+
+    self.update_view();
   }
 
   fn update_view(&mut self) {
-    // if let Some(scene) = &mut self.scene {
-    //   scene.camera.update_view();
-    // }
+    if let Some(scene) = &mut self.scene {
+      scene.update_view();
+    }
   }
 
   fn update(&mut self, dt: Duration) {
     self.t += dt.as_secs_f32();
 
-    // if let Some(scene) = &mut self.scene {
-    //   scene.update(&dt);
-    // }
+    if let Some(scene) = &mut self.scene {
+      scene.update(&dt);
+    }
   }
 
   fn render(
@@ -72,16 +85,18 @@ impl World {
     _dt: Duration,
   ) -> Result<()> {
     let mut frame = context.draw();
+    frame.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
 
-    // if let Some(scene) = &self.scene {
-    //   scene.draw(&mut frame);
+    if let Some(scene) = &self.scene {
+      scene.draw(&mut frame)?;
 
-    //   if self.show_axis {
-    //     if let Some(axis) = &self.axis {
-    //       axis.draw(&mut frame, &scene.camera.view_projection())?;
-    //     }
-    //   }
-    // }
+      if self.show_axis {
+        if let Some(axis) = &self.axis {
+          let vp = scene.view_projection().to_cols_array_2d().into();
+          axis.draw(&mut frame, &vp)?;
+        }
+      }
+    }
 
     frame.finish()?;
     Ok(())
@@ -93,7 +108,6 @@ struct App {
   window: Window,
   display: Display<WindowSurface>,
   event_loop: EventLoopProxy<UserSignal>,
-  boot_time: std::time::Instant,
   last_update: std::time::Instant,
   last_frame: std::time::Instant,
 
@@ -112,9 +126,8 @@ impl App {
     display: Display<WindowSurface>,
     event_loop: EventLoopProxy<UserSignal>,
   ) -> Result<Self> {
-    let boot_time = std::time::Instant::now();
-    let last_update = boot_time;
-    let last_frame = boot_time;
+    let last_update = std::time::Instant::now();
+    let last_frame = std::time::Instant::now();
 
     let world = World::new();
 
@@ -122,7 +135,6 @@ impl App {
       window,
       display,
       event_loop,
-      boot_time,
       last_update,
       last_frame,
       last_pos: [0.0, 0.0],
@@ -179,10 +191,7 @@ impl App {
 
   fn handle_resize(&mut self, size: PhysicalSize<u32>) {
     println!("Resized to {:?}", size);
-    // if let Some(scene) = &mut self.world.scene {
-    //   scene.camera.handle_window_resize((size.width, size.height));
-    // }
-    self.world.handle_resize(&self.display);
+    self.world.handle_resize(size.width, size.height);
     self.window.request_redraw();
   }
 
@@ -198,10 +207,10 @@ impl App {
     if event.logical_key == NamedKey::Escape {
       self.event_loop.send_event(UserSignal::Quit).unwrap();
     } else if event.logical_key.to_text() == Some("p") {
-      // if let Some(scene) = &mut self.world.scene {
-      //   scene.camera.toggle_perspective();
-      //   scene.camera.update_view();
-      // }
+      if let Some(scene) = &mut self.world.scene {
+        scene.camera.toggle_projection();
+        scene.update_view();
+      }
       self.window.request_redraw();
     } else if event.logical_key.to_text() == Some("a") {
       self.world.show_axis = !self.world.show_axis;
@@ -209,12 +218,12 @@ impl App {
     } else if event.logical_key == NamedKey::F6
       || event.logical_key.to_text() == Some("r")
     {
-      // if let Some(scene) = &mut self.world.scene {
-      //   match scene.reload_shader(&self.display) {
-      //     Ok(_) => println!("Reloaded shaders"),
-      //     Err(e) => eprintln!("Failed to reload shader: {}", e),
-      //   }
-      // }
+      if let Some(scene) = &mut self.world.scene {
+        match scene.reload_shader(&self.display) {
+          Ok(_) => println!("Reloaded shaders"),
+          Err(e) => eprintln!("Failed to reload shader: {}", e),
+        }
+      }
 
       self.window.request_redraw();
     }
@@ -320,18 +329,20 @@ impl App {
     delta: winit::event::MouseScrollDelta,
     _phase: winit::event::TouchPhase,
   ) {
-    let d = match delta {
-      winit::event::MouseScrollDelta::LineDelta(_x, y) => y * 20.0,
-      winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+    let (dx, dy) = match delta {
+      winit::event::MouseScrollDelta::LineDelta(x, y) => {
+        (x as f32 * 30.0, y as f32 * 30.0)
+      }
+      winit::event::MouseScrollDelta::PixelDelta(pos) => {
+        (pos.x as f32, pos.y as f32)
+      }
     };
 
-    // let Some(scene) = self.world.scene.as_mut() else {
-    //   return;
-    // };
+    let Some(scene) = self.world.scene.as_mut() else {
+      return;
+    };
 
-    // let camera_target: &mut Camera = &mut scene.camera;
-    // camera_target.add_distance(d * 0.01);
-    self.world.update_view();
+    scene.handle_scroll(dx, dy);
   }
 }
 
@@ -352,6 +363,10 @@ fn main() -> Result<()> {
   app.world.set_axis(axis);
 
   // setup the scene
+  let mut scene = Scene::default();
+  let teapot = Teapot::load(&app.display)?;
+  scene.add_object(teapot);
+  app.world.set_scene(scene);
 
   // initial update
   app.world.update(std::time::Duration::from_secs(0));

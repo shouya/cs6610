@@ -688,6 +688,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "779ae4bf7e8421cf91c0b3b64e7e8b40b862fba4d393f59150042de7c4965a94"
+
+[[package]]
 name = "glium"
 version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1429,10 +1435,10 @@ name = "project-07-shadow-mapping"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath 0.18.0",
  "common",
  "derive_more",
  "genmesh",
+ "glam",
  "glium",
  "image",
  "rand 0.8.5",
