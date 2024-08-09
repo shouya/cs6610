@@ -1,6 +1,6 @@
-use glam::{EulerRot, Mat3, Mat4, Vec3};
+use std::cell::RefCell;
 
-use crate::transform::Transform;
+use glam::{EulerRot, Mat3, Mat4, Quat, Vec3};
 
 pub enum Projection {
   Orthographic,
@@ -15,21 +15,24 @@ pub struct Camera {
   looking_at: Vec3,
   projection: Projection,
   aspect: f32,
+  cache: RefCell<Option<CameraCache>>,
 }
 
-// #[derive(Debug, Clone, Copy)]
-// struct CameraCache {
-//   view: Mat4,
-//   projection: Mat4,
-// }
+#[derive(Debug, Clone, Copy)]
+struct CameraCache {
+  view: Mat4,
+  projection: Mat4,
+  view_projection: Mat4,
+}
 
 impl Default for Camera {
   fn default() -> Self {
     Self {
-      pos: Vec3::new(0.5, 2.0, 2.0),
+      pos: Vec3::new(0.5, 1.0, 1.0),
       looking_at: Vec3::ZERO,
       projection: Projection::Perspective { fov: 90.0 },
       aspect: 1.0,
+      cache: RefCell::new(None),
     }
   }
 }
@@ -43,18 +46,38 @@ impl Camera {
   }
 
   pub fn view(&self) -> Mat4 {
-    // TODO: cache the result
-    self.compute_view_matrix()
+    self
+      .cache
+      .borrow_mut()
+      .get_or_insert_with(|| self.compute_cache())
+      .view
   }
 
   pub fn projection(&self) -> Mat4 {
-    // TODO: cache the result
-    self.compute_projection_matrix()
+    self
+      .cache
+      .borrow_mut()
+      .get_or_insert_with(|| self.compute_cache())
+      .projection
   }
 
   pub fn view_projection(&self) -> Mat4 {
-    // TODO: cache the result
-    self.projection() * self.view()
+    self
+      .cache
+      .borrow_mut()
+      .get_or_insert_with(|| self.compute_cache())
+      .view_projection
+  }
+
+  fn compute_cache(&self) -> CameraCache {
+    let view = self.compute_view_matrix();
+    let projection = self.compute_projection_matrix();
+    let view_projection = projection * view;
+    CameraCache {
+      view,
+      projection,
+      view_projection,
+    }
   }
 
   fn compute_view_matrix(&self) -> Mat4 {
@@ -84,12 +107,11 @@ impl Camera {
   }
 
   pub fn change_distance(&mut self, delta: f32) {
-    let orig_pos = self.pos;
     let looking_dir = (self.looking_at - self.pos).normalize();
     let new_pos = self.pos + looking_dir * delta * 0.003;
 
     // new pos moved past the looking direction
-    if orig_pos.dot(new_pos) < 0.0 {
+    if self.pos.dot(new_pos) < 0.0 {
       return;
     }
 
@@ -97,10 +119,16 @@ impl Camera {
   }
 
   pub fn rotate(&mut self, dx: f32, dy: f32) {
-    let dir = (self.looking_at - self.pos).normalize();
+    let dir = (self.pos - self.looking_at).normalize();
     let dist = self.pos.distance(self.looking_at);
-    let new_dir = Mat3::from_euler(EulerRot::YXZ, dy, dx, 0.0) * dir;
-    let new_pos = new_dir * dist;
+
+    let horz_axis = Vec3::Y.cross(dir).normalize();
+
+    let rot_vert = Mat3::from_quat(Quat::from_axis_angle(horz_axis, dy * 0.01));
+    let rot_horz = Mat3::from_euler(EulerRot::XYZ, 0.0, -dx * 0.01, 0.0);
+
+    let new_dir = rot_horz * rot_vert * dir;
+    let new_pos = self.looking_at + new_dir * dist;
 
     self.pos = new_pos;
   }
@@ -114,6 +142,6 @@ impl Camera {
 
   // handle view update by recomputing the matrices
   pub fn update_view(&mut self) {
-    // TODO: invalidate the cache
+    self.cache.borrow_mut().take();
   }
 }

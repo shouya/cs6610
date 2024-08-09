@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use glam::Mat4;
-use winit::event::Modifiers;
+use winit::keyboard::ModifiersState;
 
 use crate::{Camera, Light, Object, Result};
 
@@ -14,7 +14,7 @@ pub struct Scene {
 
 // Event handling
 impl Scene {
-  pub fn handle_drag(&mut self, dx: f32, dy: f32, _modifiers: Modifiers) {
+  pub fn handle_drag(&mut self, dx: f32, dy: f32, _modifiers: ModifiersState) {
     self.camera.rotate(dx, dy);
     self.camera.update_view();
   }

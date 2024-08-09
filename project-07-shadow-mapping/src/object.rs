@@ -114,7 +114,7 @@ impl Object {
   pub fn update(&mut self, _dt: &std::time::Duration) {}
 
   pub fn model(&self) -> Mat4 {
-    dbg!(self.transform.to_mat4())
+    self.transform.to_mat4()
   }
 
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {

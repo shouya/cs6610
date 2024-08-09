@@ -289,38 +289,19 @@ impl App {
     _device_id: DeviceId,
     position: winit::dpi::PhysicalPosition<f64>,
   ) {
+    let Some(scene) = self.world.scene.as_mut() else {
+      return;
+    };
+
     self.mouse_pos = [position.x as f32, position.y as f32];
-    // let Some(scene) = self.world.scene.as_mut() else {
-    //   return;
-    // };
-
-    // let camera_target: &mut Camera = &mut scene.camera;
-    // let light_target: &mut Light = &mut scene.light;
-
-    // // left drag: rotate camera
-    // if self.mouse_down.0 && !self.modifiers.control_key() {
-    //   let dx = self.mouse_pos[0] - self.last_pos[0];
-    //   let dy = self.mouse_pos[1] - self.last_pos[1];
-    //   camera_target.add_rotation([dx * 0.1, dy * 0.1]);
-    // }
-
-    // // ctrl + left drag: rotate light
-    // if self.mouse_down.0 && self.modifiers.control_key() {
-    //   let dx = self.mouse_pos[0] - self.last_pos[0];
-    //   let _dy = self.mouse_pos[1] - self.last_pos[1];
-    //   light_target.add_rotation(dx * 0.01);
-    // }
-
-    // // right drag: change camera distance
-    // if self.mouse_down.1 {
-    //   let dy = self.mouse_pos[1] - self.last_pos[1];
-
-    //   camera_target.add_distance(dy * 0.01);
-    // }
-
-    self.world.update_view();
+    let dx = self.mouse_pos[0] - self.last_pos[0];
+    let dy = self.mouse_pos[1] - self.last_pos[1];
     self.last_pos = self.mouse_pos;
-    self.window.request_redraw();
+
+    if self.mouse_down.0 {
+      scene.handle_drag(dx, dy, self.modifiers);
+      self.window.request_redraw();
+    }
   }
 
   fn handle_mouse_wheel(
