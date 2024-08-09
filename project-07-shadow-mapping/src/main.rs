@@ -8,6 +8,7 @@ mod transform;
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface as _};
+use object::Plane;
 use scene::Scene;
 use winit::{
   dpi::PhysicalSize,
@@ -346,8 +347,9 @@ fn main() -> Result<()> {
 
   // setup the scene
   let mut scene = Scene::default();
-  let teapot = Teapot::load(&app.display)?;
-  scene.add_object(teapot);
+  scene.add_object(Teapot::load(&app.display)?);
+  scene.add_object(Plane::load(&app.display)?);
+
   app.world.set_scene(scene);
 
   // initial update

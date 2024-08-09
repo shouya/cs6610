@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use common::{teapot_path, DynUniforms, MergedUniform};
+use common::{asset_path, teapot_path, DynUniforms, MergedUniform};
 use glam::{Mat3, Mat4, Vec3};
 use glium::backend::Facade;
 use glium::uniforms::Uniforms;
@@ -11,13 +11,12 @@ use crate::mesh::{GPUMesh, Mesh};
 use crate::transform::Transform;
 use crate::{Camera, Result};
 
+const SHADER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/object");
 #[allow(unused)]
 pub struct Teapot;
 
 impl Teapot {
   pub fn load(facade: &impl Facade) -> Result<Object> {
-    const SHADER_PATH: &str =
-      concat!(env!("CARGO_MANIFEST_DIR"), "/assets/object");
     let mut object = Object::load(&teapot_path(), &SHADER_PATH, facade)?;
 
     object.transform = Transform {
@@ -26,6 +25,18 @@ impl Teapot {
       rotation: Vec3::new(-90.0, 0.0, 0.0),
       ..Transform::default()
     };
+
+    Ok(object)
+  }
+}
+
+#[allow(unused)]
+pub struct Plane;
+
+impl Plane {
+  pub fn load(facade: &impl Facade) -> Result<Object> {
+    let model_path = asset_path("plane.obj");
+    let object = Object::load(&model_path, &SHADER_PATH, facade)?;
 
     Ok(object)
   }
@@ -148,14 +159,12 @@ impl Object {
     let uniform1 = MergedUniform::new(&uniforms, &model_uniforms);
     let uniform2 = MergedUniform::new(&light_uniforms, &uniform1);
 
-    let culling = glium::draw_parameters::BackfaceCullingMode::CullClockwise;
     let draw_params = DrawParameters {
       depth: glium::Depth {
         test: glium::draw_parameters::DepthTest::IfLess,
         write: true,
         ..Default::default()
       },
-      backface_culling: culling,
       ..Default::default()
     };
 
