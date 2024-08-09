@@ -10,7 +10,7 @@ out vec3 n_v; // in view space
 
 out vec3 orig_pos; // in model space
 
-uniform mat4 mv, mvp;
+uniform mat4 mv, mvp, v;
 uniform mat3 mv3, mv_n; // for transforming vertex normals
 
 uniform vec3 light_dir_or_loc;
@@ -30,11 +30,12 @@ void main()
 
   switch (light_type) {
   case 0: // directional light
-    light_dir_raw = normalize(mv3 * normalize(light_dir_or_loc));
+    light_dir_raw = normalize((v * vec4(light_dir_or_loc, 0.0)).xyz);
     break;
   case 1: // point light
   case 2: // spot light
-    light_dir_raw = normalize(mv3 * normalize(light_dir_or_loc - pos_v));
+    vec3 dir = normalize(light_dir_or_loc - pos_v);
+    light_dir_raw = normalize((v * vec4(dir, 0.0)).xyz);
     break;
   }
 }

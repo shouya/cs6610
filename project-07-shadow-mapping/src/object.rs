@@ -21,8 +21,9 @@ impl Teapot {
 
     object.transform = Transform {
       scale: Vec3::splat(0.05),
-      // the object itself is rotated 90 to the front, let's rotate it back a little.
-      rotation: Vec3::new(-90.0, 0.0, 0.0),
+      // the object itself is rotated 90 degrees to the front, let's
+      // rotate it back a little.
+      rotation: Vec3::new(-90f32.to_radians(), 0.0, 0.0),
       ..Transform::default()
     };
 
@@ -37,6 +38,23 @@ impl Plane {
   pub fn load(facade: &impl Facade) -> Result<Object> {
     let model_path = asset_path("plane.obj");
     let object = Object::load(&model_path, &SHADER_PATH, facade)?;
+
+    Ok(object)
+  }
+}
+
+#[allow(unused)]
+pub struct LightObject;
+
+impl LightObject {
+  pub fn load(facade: &impl Facade) -> Result<Object> {
+    let model_path = asset_path("light.obj");
+    let mut object = Object::load(&model_path, &SHADER_PATH, facade)?;
+
+    object.transform = Transform {
+      scale: Vec3::splat(0.1),
+      ..Transform::default()
+    };
 
     Ok(object)
   }
@@ -65,6 +83,10 @@ impl Object {
     }
 
     Ok(())
+  }
+
+  pub fn set_transform(&mut self, transform: Transform) {
+    self.transform = transform;
   }
 
   // world space
@@ -144,20 +166,23 @@ impl Object {
     program: &Program,
     uniforms: impl Uniforms,
   ) {
-    let mv: Mat4 = camera.view() * self.model();
+    let v: Mat4 = camera.view();
+    let mv: Mat4 = v * self.model();
     let mv3: Mat3 = Mat3::from_mat4(mv);
     let mv_n: Mat3 = mv3.inverse().transpose();
     let mvp: Mat4 = camera.projection() * mv;
-    let light_uniforms = light.uniforms();
 
     let model_uniforms = uniform! {
+      v: v.to_cols_array_2d(),
       mvp: mvp.to_cols_array_2d(),
       mv: mv.to_cols_array_2d(),
       mv3: mv3.to_cols_array_2d(),
       mv_n: mv_n.to_cols_array_2d(),
     };
-    let uniform1 = MergedUniform::new(&uniforms, &model_uniforms);
-    let uniform2 = MergedUniform::new(&light_uniforms, &uniform1);
+    let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
+
+    let light_uniforms = light.uniforms();
+    let uniforms = MergedUniform::new(&light_uniforms, &uniforms);
 
     let draw_params = DrawParameters {
       depth: glium::Depth {
@@ -168,7 +193,7 @@ impl Object {
       ..Default::default()
     };
 
-    self.mesh.draw(frame, program, &uniform2, &draw_params);
+    self.mesh.draw(frame, program, &uniforms, &draw_params);
   }
 
   pub fn world_pos(&self) -> Vec3 {

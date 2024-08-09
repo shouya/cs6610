@@ -349,6 +349,7 @@ fn main() -> Result<()> {
   let mut scene = Scene::default();
   scene.add_object(Teapot::load(&app.display)?);
   scene.add_object(Plane::load(&app.display)?);
+  scene.init_light_object(&app.display)?;
 
   app.world.set_scene(scene);
 

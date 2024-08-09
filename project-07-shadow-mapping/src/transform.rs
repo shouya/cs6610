@@ -3,7 +3,7 @@ use glam::{EulerRot, Mat3, Mat4, Vec3};
 #[derive(Debug, Clone, Copy)]
 pub struct Transform {
   pub translation: Vec3,
-  // euler angle xyz, in degree
+  // euler angle xyz, in radians
   pub rotation: Vec3,
   pub scale: Vec3,
 }
@@ -12,9 +12,9 @@ impl Transform {
   pub fn to_mat3(&self) -> Mat3 {
     let rot = Mat3::from_euler(
       EulerRot::XYZ,
-      self.rotation.x.to_radians(),
-      self.rotation.y.to_radians(),
-      self.rotation.z.to_radians(),
+      self.rotation.x,
+      self.rotation.y,
+      self.rotation.z,
     );
 
     let scale = Mat3::from_diagonal(self.scale);

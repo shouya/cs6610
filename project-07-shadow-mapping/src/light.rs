@@ -7,15 +7,23 @@ use glium::{
 use crate::transform::Transform;
 
 pub enum LightVariant {
-  Directional { dir: Vec3 },
-  Point { pos: Vec3 },
-  Spot { pos: Vec3, fov: f32 },
+  Directional {
+    // direction towards the light
+    dir: Vec3,
+  },
+  Point {
+    pos: Vec3,
+  },
+  Spot {
+    pos: Vec3,
+    fov: f32,
+  },
 }
 
 impl Default for LightVariant {
   fn default() -> Self {
     LightVariant::Directional {
-      dir: Vec3::new(-0.5, -1.0, 0.5),
+      dir: Vec3::new(0.5, 1.0, 0.5).normalize(),
     }
   }
 }
@@ -73,27 +81,22 @@ impl Light {
     }
   }
 
-  pub fn to_transform(&self) -> Transform {
-    match self.variant {
-      LightVariant::Directional { dir } => Transform {
-        rotation: (-dir).normalize(),
-        ..Transform::default()
-      },
-      LightVariant::Point { pos } => Transform {
-        translation: pos,
-        rotation: (-pos).normalize(),
-        ..Transform::default()
-      },
-      LightVariant::Spot { pos, .. } => Transform {
-        translation: pos,
-        rotation: (-pos).normalize(),
-        ..Transform::default()
-      },
+  pub fn light_object_transform(&self) -> Transform {
+    let position = match self.variant {
+      LightVariant::Directional { dir } => dir * 2.0,
+      LightVariant::Point { pos } => pos,
+      LightVariant::Spot { pos, .. } => pos,
+    };
+
+    Transform {
+      translation: position,
+      rotation: Vec3::ZERO,
+      scale: Vec3::splat(0.1),
     }
   }
 
-  fn rotate(&mut self, dx: f32, _dy: f32) {
-    let rot = Mat3::from_rotation_y(dx);
+  pub fn rotate(&mut self, dx: f32, _dy: f32) {
+    let rot = Mat3::from_rotation_y(dx * 0.1);
     match self.variant {
       LightVariant::Directional { ref mut dir } => {
         *dir = rot * *dir;
