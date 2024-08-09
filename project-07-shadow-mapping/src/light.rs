@@ -15,7 +15,7 @@ pub enum LightVariant {
 impl Default for LightVariant {
   fn default() -> Self {
     LightVariant::Directional {
-      dir: Vec3::new(0.5, 1.0, 0.5),
+      dir: Vec3::new(-0.5, -1.0, 0.5),
     }
   }
 }
@@ -26,7 +26,6 @@ pub enum ShadowMap {
   Spot { map: DepthTexture2d },
 }
 
-#[derive(Default)]
 pub struct Light {
   // each component can be greater than one. pre-multiplied by intensity.
   color: Vec3,
@@ -34,17 +33,19 @@ pub struct Light {
   shadow_map: Option<ShadowMap>,
 }
 
+impl Default for Light {
+  fn default() -> Self {
+    Self {
+      color: Vec3::ONE,
+      variant: LightVariant::default(),
+      shadow_map: None,
+    }
+  }
+}
+
 impl Light {
   pub fn color(&self) -> Vec3 {
     self.color
-  }
-
-  pub fn light_dir(&self, world_pos: Vec3) -> Vec3 {
-    match self.variant {
-      LightVariant::Directional { dir } => dir,
-      LightVariant::Point { pos } => (pos - world_pos).normalize(),
-      LightVariant::Spot { pos, .. } => (pos - world_pos).normalize(),
-    }
   }
 
   pub fn uniforms(&self) -> impl glium::uniforms::Uniforms {

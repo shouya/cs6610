@@ -55,8 +55,11 @@ impl Scene {
 
   pub fn reload_shader(
     &mut self,
-    _facade: &impl glium::backend::Facade,
+    facade: &impl glium::backend::Facade,
   ) -> Result<()> {
+    for object in &mut self.objects {
+      object.reload_shader(facade)?;
+    }
     Ok(())
   }
 }

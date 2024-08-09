@@ -15,13 +15,14 @@ uniform sampler2D map_Kd, map_Ks, map_Ka;
 uniform uint use_map_Kd, use_map_Ks, use_map_Ka;
 
 // in view space
-in vec3 light_dir;
+in vec3 light_dir_raw;
 uniform vec3 light_color;
 uniform float light_cone_angle;
 
 void main() {
   vec3 n_v = normalize(n_v);
   vec3 view_dir = normalize(-pos_v);
+  vec3 light_dir = normalize(light_dir_raw);
   // geometry term
   float geom = max(dot(n_v, light_dir), 0.0);
 

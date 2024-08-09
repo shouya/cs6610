@@ -333,6 +333,7 @@ fn main() -> Result<()> {
     .expect("Failed to create event loop");
   let window = WindowBuilder::new()
     .with_name("cs5610", env!("CARGO_BIN_NAME"))
+    .with_inner_size(PhysicalSize::new(2000, 1500))
     .build(&event_loop)?;
   let display = common::gl_boilerplate::init_display(&window);
 

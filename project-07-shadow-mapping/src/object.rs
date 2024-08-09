@@ -137,18 +137,16 @@ impl Object {
     let mv3: Mat3 = Mat3::from_mat4(mv);
     let mv_n: Mat3 = mv3.inverse().transpose();
     let mvp: Mat4 = camera.projection() * mv;
-
-    // in view space
-    let light_dir: [f32; 3] = light.light_dir(self.world_pos()).into();
+    let light_uniforms = light.uniforms();
 
     let model_uniforms = uniform! {
       mvp: mvp.to_cols_array_2d(),
       mv: mv.to_cols_array_2d(),
+      mv3: mv3.to_cols_array_2d(),
       mv_n: mv_n.to_cols_array_2d(),
-      light_dir: light_dir,
-      light_color: light.color().to_array(),
     };
-    let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
+    let uniform1 = MergedUniform::new(&uniforms, &model_uniforms);
+    let uniform2 = MergedUniform::new(&light_uniforms, &uniform1);
 
     let culling = glium::draw_parameters::BackfaceCullingMode::CullClockwise;
     let draw_params = DrawParameters {
@@ -161,7 +159,7 @@ impl Object {
       ..Default::default()
     };
 
-    self.mesh.draw(frame, program, &uniforms, &draw_params);
+    self.mesh.draw(frame, program, &uniform2, &draw_params);
   }
 
   pub fn world_pos(&self) -> Vec3 {
