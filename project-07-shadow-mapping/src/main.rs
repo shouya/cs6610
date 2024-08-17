@@ -11,7 +11,7 @@ use glium::{glutin::surface::WindowSurface, Display, Surface as _};
 use object::Plane;
 use scene::Scene;
 use winit::{
-  dpi::PhysicalSize,
+  dpi::{LogicalSize, PhysicalSize},
   event::{DeviceId, Event, KeyEvent, WindowEvent},
   event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
   keyboard::{ModifiersState, NamedKey},
@@ -312,9 +312,7 @@ impl App {
     _phase: winit::event::TouchPhase,
   ) {
     let (dx, dy) = match delta {
-      winit::event::MouseScrollDelta::LineDelta(x, y) => {
-        (x as f32 * 30.0, y as f32 * 30.0)
-      }
+      winit::event::MouseScrollDelta::LineDelta(x, y) => (x * 30.0, y * 30.0),
       winit::event::MouseScrollDelta::PixelDelta(pos) => {
         (pos.x as f32, pos.y as f32)
       }
@@ -334,7 +332,7 @@ fn main() -> Result<()> {
     .expect("Failed to create event loop");
   let window = WindowBuilder::new()
     .with_name("cs5610", env!("CARGO_BIN_NAME"))
-    .with_inner_size(PhysicalSize::new(2000, 1500))
+    .with_inner_size(LogicalSize::new(800, 600))
     .build(&event_loop)?;
   let display = common::gl_boilerplate::init_display(&window);
 
@@ -349,6 +347,8 @@ fn main() -> Result<()> {
   let mut scene = Scene::default();
   scene.add_object(Teapot::load(&app.display)?);
   scene.add_object(Plane::load(&app.display)?);
+
+  scene.init_light(&app.display)?;
   scene.init_light_object(&app.display)?;
 
   app.world.set_scene(scene);

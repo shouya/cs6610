@@ -10,13 +10,16 @@ out vec3 n_v; // in view space
 
 out vec3 orig_pos; // in model space
 
-uniform mat4 mv, mvp, v;
+uniform mat4 mv, mvp, v, m;
 uniform mat3 mv3, mv_n; // for transforming vertex normals
 
 uniform vec3 light_dir_or_loc;
 uniform int light_type;
 
 out vec3 light_dir_raw;
+
+uniform mat4 shadow_transform; // map from world space to shadow texture space
+out vec3 shadow_pos; // in shadow texture space
 
 void main()
 {
@@ -27,6 +30,9 @@ void main()
   n_v = mv_n * n;
 
   uv_t = uv;
+
+  shadow_pos = (shadow_transform * m * vec4(pos, 1.0)).xyz;
+  shadow_pos.z -= 0.001;
 
   switch (light_type) {
   case 0: // directional light

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use common::{asset_path, teapot_path, DynUniforms, MergedUniform};
-use glam::{Mat3, Mat4, Vec3};
+use common::{asset_path, load_program, teapot_path, MergedUniform};
+use glam::{Mat3, Mat4, Quat, Vec3};
 use glium::backend::Facade;
 use glium::uniforms::Uniforms;
 use glium::{uniform, DrawParameters, Program, Surface};
@@ -23,7 +23,7 @@ impl Teapot {
       scale: Vec3::splat(0.05),
       // the object itself is rotated 90 degrees to the front, let's
       // rotate it back a little.
-      rotation: Vec3::new(-90f32.to_radians(), 0.0, 0.0),
+      rotation: Quat::from_rotation_x(-90f32.to_radians()),
       ..Transform::default()
     };
 
@@ -76,7 +76,10 @@ impl Object {
     };
 
     match load_program(shader_path, facade) {
-      Ok(program) => self.program = Some(program),
+      Ok(program) => {
+        self.program = Some(program);
+        println!("Shader reloaded: {:?}", shader_path);
+      }
       Err(e) => {
         eprintln!("Failed to reload shader: {}", e);
       }
@@ -152,7 +155,8 @@ impl Object {
 
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
     if let Some(program) = &self.program {
-      self.draw_with_program(frame, camera, light, program, DynUniforms::new());
+      let light_uniforms = light.uniforms(camera);
+      self.draw_with_program(frame, camera, program, light_uniforms);
     } else {
       eprintln!("GPUObject::draw: program is not loaded");
     }
@@ -162,27 +166,25 @@ impl Object {
     &self,
     frame: &mut impl Surface,
     camera: &Camera,
-    light: &Light,
     program: &Program,
     uniforms: impl Uniforms,
   ) {
+    let m: Mat4 = self.model();
     let v: Mat4 = camera.view();
-    let mv: Mat4 = v * self.model();
+    let mv: Mat4 = v * m;
     let mv3: Mat3 = Mat3::from_mat4(mv);
     let mv_n: Mat3 = mv3.inverse().transpose();
     let mvp: Mat4 = camera.projection() * mv;
 
     let model_uniforms = uniform! {
       v: v.to_cols_array_2d(),
+      m: m.to_cols_array_2d(),
       mvp: mvp.to_cols_array_2d(),
       mv: mv.to_cols_array_2d(),
       mv3: mv3.to_cols_array_2d(),
       mv_n: mv_n.to_cols_array_2d(),
     };
     let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
-
-    let light_uniforms = light.uniforms();
-    let uniforms = MergedUniform::new(&light_uniforms, &uniforms);
 
     let draw_params = DrawParameters {
       depth: glium::Depth {
@@ -205,8 +207,8 @@ impl Object {
     self
   }
 
-  pub fn rotated_y(mut self, degree: f32) -> Self {
-    self.transform.rotation = Vec3::new(0.0, degree, 0.0);
+  pub fn rotated_y(mut self, angle: f32) -> Self {
+    self.transform.rotation = Quat::from_rotation_y(angle);
     self
   }
 
@@ -224,14 +226,4 @@ impl Object {
     self.receive_shadow = false;
     self
   }
-}
-
-fn load_program(path: &Path, facade: &impl Facade) -> Result<Program> {
-  let vert_path = path.with_extension("vert");
-  let frag_path = path.with_extension("frag");
-
-  let vert_src = std::fs::read_to_string(vert_path)?;
-  let frag_src = std::fs::read_to_string(frag_path)?;
-
-  Ok(Program::from_source(facade, &vert_src, &frag_src, None)?)
 }

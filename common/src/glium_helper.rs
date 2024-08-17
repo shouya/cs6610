@@ -1,9 +1,11 @@
 use std::{
   borrow::Cow,
   collections::{HashMap, HashSet},
+  path::Path,
 };
 
 use glium::{
+  backend::Facade,
   texture::RawImage2d,
   uniforms::{AsUniformValue, UniformValue, Uniforms},
 };
@@ -61,6 +63,39 @@ impl Uniforms for DynUniforms<'_> {
   }
 }
 
+pub struct OwnedMergedUniform<U1, U2> {
+  u1: U1,
+  u2: U2,
+}
+
+impl<U1, U2> OwnedMergedUniform<U1, U2> {
+  pub fn new(u1: U1, u2: U2) -> Self {
+    Self { u1, u2 }
+  }
+}
+
+impl<U1, U2> Uniforms for OwnedMergedUniform<U1, U2>
+where
+  U1: Uniforms,
+  U2: Uniforms,
+{
+  fn visit_values<'a, F: FnMut(&str, UniformValue<'a>)>(&'a self, mut f: F) {
+    let mut visited = HashSet::new();
+
+    self.u1.visit_values(|name, value| {
+      if visited.insert(name.to_owned()) {
+        f(name, value);
+      }
+    });
+
+    self.u2.visit_values(|name, value| {
+      if !visited.contains(name) && visited.insert(name.to_owned()) {
+        f(name, value);
+      }
+    });
+  }
+}
+
 pub struct MergedUniform<'a, U1, U2> {
   u1: &'a U1,
   u2: &'a U2,
@@ -105,4 +140,19 @@ pub fn to_raw_image(image: &RgbImage) -> RawImage2d<'_, u8> {
     height,
     format,
   }
+}
+
+pub fn load_program<P: AsRef<Path>>(
+  path: P,
+  facade: &impl Facade,
+) -> Result<glium::Program, anyhow::Error> {
+  let vert_path = path.as_ref().with_extension("vert");
+  let frag_path = path.as_ref().with_extension("frag");
+
+  let vert_src = std::fs::read_to_string(vert_path)?;
+  let frag_src = std::fs::read_to_string(frag_path)?;
+
+  Ok(glium::Program::from_source(
+    facade, &vert_src, &frag_src, None,
+  )?)
 }

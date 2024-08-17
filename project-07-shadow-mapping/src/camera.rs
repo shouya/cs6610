@@ -8,6 +8,7 @@ pub enum Projection {
     // angle in degrees
     fov: f32,
   },
+  Custom(Mat4),
 }
 
 pub struct Camera {
@@ -38,6 +39,21 @@ impl Default for Camera {
 }
 
 impl Camera {
+  pub fn new(
+    pos: Vec3,
+    looking_at: Vec3,
+    projection: Projection,
+    aspect: f32,
+  ) -> Self {
+    Self {
+      pos,
+      looking_at,
+      projection,
+      aspect,
+      cache: RefCell::new(None),
+    }
+  }
+
   pub fn handle_resize(&mut self, width: f32, height: f32) {
     if height == 0.0 {
       return;
@@ -103,6 +119,7 @@ impl Camera {
       Projection::Perspective { fov } => {
         Mat4::perspective_rh_gl(fov.to_radians(), self.aspect, 0.1, 100.0)
       }
+      Projection::Custom(mat) => mat,
     }
   }
 
@@ -137,6 +154,7 @@ impl Camera {
     self.projection = match self.projection {
       Projection::Orthographic => Projection::Perspective { fov: 90.0 },
       Projection::Perspective { .. } => Projection::Orthographic,
+      Projection::Custom(_) => unreachable!(),
     };
   }
 

@@ -8,7 +8,9 @@ pub mod obj_loader;
 use std::path::PathBuf;
 
 pub use axis::Axis;
-pub use glium_helper::{to_raw_image, DynUniforms, MergedUniform};
+pub use glium_helper::{
+  load_program, to_raw_image, DynUniforms, MergedUniform, OwnedMergedUniform,
+};
 pub use obj_loader::{Group, Mtl, MtlLib, Obj, SimpleObj, VAIdx};
 
 pub fn teapot_path() -> PathBuf {

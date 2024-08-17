@@ -16,8 +16,13 @@ uniform uint use_map_Kd, use_map_Ks, use_map_Ka;
 
 // in view space
 in vec3 light_dir_raw;
-uniform vec3 light_color;
 uniform float light_cone_angle;
+uniform vec3 light_color;
+
+// in light space
+in vec3 shadow_pos;
+uniform sampler2DShadow shadow_map;
+uniform sampler2D shadow_map_debug;
 
 void main() {
   vec3 n_v = normalize(n_v);
@@ -44,6 +49,13 @@ void main() {
     oKs = Ks;
   }
 
+  // debugging:
+  // float shadow_value = texture(shadow_map_debug, uv_t).r;
+  // color = vec4(vec3(shadow_value), 1.0);
+  // return;
+
+  float shadow = texture(shadow_map, shadow_pos);
+
   vec3 oKa;
   if (use_map_Ka == 1u) {
     oKa = texture(map_Ka, uv_t).rgb * Ka;
@@ -51,5 +63,7 @@ void main() {
     oKa = Ka;
   }
 
-  color = vec4(light_color * (geom * oKd + spec * oKs) + oKa, 1.0);
+  vec3 rgb = light_color * (geom * oKd + spec * oKs) + oKa;
+
+  color = vec4(rgb * shadow, 1.0);
 }

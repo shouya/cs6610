@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 use glam::Mat4;
+use glium::backend::Context;
 use winit::keyboard::ModifiersState;
 
 use crate::{object::LightObject, Camera, Light, Object, Result};
@@ -12,6 +13,8 @@ pub struct Scene {
   pub objects: Vec<Object>,
   // tracking the position and orientation of the light
   pub light_obj: Option<Object>,
+  // used internally
+  context: Option<Rc<Context>>,
 }
 
 // Event handling
@@ -70,16 +73,50 @@ impl Scene {
     self.sync_light_obj();
     Ok(())
   }
+
+  pub fn init_light(
+    &mut self,
+    facade: &impl glium::backend::Facade,
+  ) -> Result<()> {
+    self.light.load_shadow_program(facade)?;
+
+    // save the context for later use
+    let _ = self.context.insert(facade.get_context().clone());
+
+    Ok(())
+  }
 }
 
 impl Scene {
   pub fn draw(&self, frame: &mut glium::Frame) -> Result<()> {
-    for object in &self.objects {
-      object.draw(frame, &self.camera, &self.light);
-    }
+    self.shadow_pass()?;
+
+    self.draw_objects(frame)?;
 
     if let Some(light_obj) = &self.light_obj {
       light_obj.draw(frame, &self.camera, &self.light);
+    }
+
+    Ok(())
+  }
+
+  fn draw_objects(&self, frame: &mut glium::Frame) -> Result<()> {
+    for object in &self.objects {
+      object.draw(frame, &self.camera, &self.light);
+    }
+    Ok(())
+  }
+
+  fn shadow_pass(&self) -> Result<()> {
+    let facade = self
+      .context
+      .as_ref()
+      .expect("Context not initialized, please call init_light");
+    let mut target = self.light.shadow_map_target(facade, &self.camera)?;
+    target.clear();
+
+    for object in &self.objects {
+      target.draw_object(object);
     }
 
     Ok(())
