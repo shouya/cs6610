@@ -17,7 +17,7 @@ members = [
 
 [workspace.dependencies]
 cgmath = "0.18.0"
-glium = "0.34.0"
+glium = { git = "https://github.com/shouya/glium", branch = "border-color-for-sampler" }
 raw-window-handle = "0.5"
 winit = "0.29.15"
 image = "0.25.2"
@@ -27,3 +27,6 @@ glam = "0.28.0"
 
 [profile.dev.package.common]
 opt-level = 2
+
+# override glium to use my own fork
+[patch.crates-io]

@@ -12,6 +12,7 @@ use crate::transform::Transform;
 use crate::{Camera, Result};
 
 const SHADER_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/object");
+
 #[allow(unused)]
 pub struct Teapot;
 

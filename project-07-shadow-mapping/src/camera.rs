@@ -96,6 +96,32 @@ impl Camera {
     }
   }
 
+  // the bounding box of the view frustum in world space
+  pub fn world_bounding_box(&self) -> (Vec3, Vec3) {
+    let inverse_vp = self.view_projection().inverse();
+    let corners = [
+      Vec3::new(-1.0, -1.0, -1.0),
+      Vec3::new(1.0, -1.0, -1.0),
+      Vec3::new(-1.0, 1.0, -1.0),
+      Vec3::new(1.0, 1.0, -1.0),
+      Vec3::new(-1.0, -1.0, 1.0),
+      Vec3::new(1.0, -1.0, 1.0),
+      Vec3::new(-1.0, 1.0, 1.0),
+      Vec3::new(1.0, 1.0, 1.0),
+    ];
+
+    let mut min = Vec3::splat(f32::INFINITY);
+    let mut max = Vec3::splat(f32::NEG_INFINITY);
+
+    for corner in &corners {
+      let corner = inverse_vp * corner.extend(1.0);
+      min = min.min(corner.truncate());
+      max = max.max(corner.truncate());
+    }
+
+    (min, max)
+  }
+
   fn compute_view_matrix(&self) -> Mat4 {
     Mat4::look_at_rh(self.pos, self.looking_at, Vec3::Y)
   }

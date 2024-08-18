@@ -19,7 +19,7 @@ uniform int light_type;
 out vec3 light_dir_raw;
 
 uniform mat4 shadow_transform; // map from world space to shadow texture space
-out vec3 shadow_pos; // in shadow texture space
+out vec4 shadow_pos; // in shadow texture space
 
 void main()
 {
@@ -31,7 +31,7 @@ void main()
 
   uv_t = uv;
 
-  shadow_pos = (shadow_transform * m * vec4(pos, 1.0)).xyz;
+  shadow_pos = (shadow_transform * m * vec4(pos, 1.0));
   shadow_pos.z -= 0.001;
 
   switch (light_type) {

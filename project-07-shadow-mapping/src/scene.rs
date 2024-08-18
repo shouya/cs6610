@@ -4,21 +4,35 @@ use glam::Mat4;
 use glium::backend::Context;
 use winit::keyboard::ModifiersState;
 
-use crate::{object::LightObject, Camera, Light, Object, Result};
+use crate::{
+  light::ShadowMapVisual, object::LightObject, Camera, Light, Object, Result,
+};
 
-#[derive(Default)]
 pub struct Scene {
   pub light: Light,
   pub camera: Camera,
   pub objects: Vec<Object>,
   // tracking the position and orientation of the light
-  pub light_obj: Option<Object>,
+  pub light_obj: Object,
+  // the boolean is used to toggle the shadow map visual
+  shadow_map_visual: (bool, ShadowMapVisual),
   // used internally
-  context: Option<Rc<Context>>,
+  context: Rc<Context>,
 }
 
 // Event handling
 impl Scene {
+  pub fn new(facade: &impl glium::backend::Facade) -> Result<Self> {
+    Ok(Self {
+      light: Light::new(facade)?,
+      camera: Camera::default(),
+      objects: Vec::new(),
+      light_obj: LightObject::load(facade)?,
+      shadow_map_visual: (false, ShadowMapVisual::new(facade)?),
+      context: facade.get_context().clone(),
+    })
+  }
+
   pub fn handle_drag(&mut self, dx: f32, dy: f32, modifiers: ModifiersState) {
     if modifiers.shift_key() {
       self.light.rotate(dx, dy);
@@ -30,9 +44,9 @@ impl Scene {
   }
 
   fn sync_light_obj(&mut self) {
-    if let Some(light_obj) = &mut self.light_obj {
-      light_obj.set_transform(self.light.light_object_transform());
-    }
+    self
+      .light_obj
+      .set_transform(self.light.light_object_transform());
   }
 
   pub fn handle_resize(&mut self, width: f32, height: f32) {
@@ -55,35 +69,15 @@ impl Scene {
     }
 
     self.sync_light_obj();
-    if let Some(light_obj) = &mut self.light_obj {
-      light_obj.update(dt);
-    }
+    self.light_obj.update(dt);
   }
 
   pub fn add_object(&mut self, teapot: Object) {
     self.objects.push(teapot);
   }
 
-  pub fn init_light_object(
-    &mut self,
-    facade: &impl glium::backend::Facade,
-  ) -> Result<()> {
-    let light_obj = LightObject::load(facade)?;
-    self.light_obj = Some(light_obj);
-    self.sync_light_obj();
-    Ok(())
-  }
-
-  pub fn init_light(
-    &mut self,
-    facade: &impl glium::backend::Facade,
-  ) -> Result<()> {
-    self.light.load_shadow_program(facade)?;
-
-    // save the context for later use
-    let _ = self.context.insert(facade.get_context().clone());
-
-    Ok(())
+  pub fn toggle_shadow_map_visual(&mut self) {
+    self.shadow_map_visual.0 = !self.shadow_map_visual.0;
   }
 }
 
@@ -91,11 +85,13 @@ impl Scene {
   pub fn draw(&self, frame: &mut glium::Frame) -> Result<()> {
     self.shadow_pass()?;
 
-    self.draw_objects(frame)?;
-
-    if let Some(light_obj) = &self.light_obj {
-      light_obj.draw(frame, &self.camera, &self.light);
+    if self.shadow_map_visual.0 {
+      self.shadow_map_visual.1.draw(frame, &self.light)?;
+      return Ok(());
     }
+
+    self.draw_objects(frame)?;
+    self.light_obj.draw(frame, &self.camera, &self.light);
 
     Ok(())
   }
@@ -108,11 +104,8 @@ impl Scene {
   }
 
   fn shadow_pass(&self) -> Result<()> {
-    let facade = self
-      .context
-      .as_ref()
-      .expect("Context not initialized, please call init_light");
-    let mut target = self.light.shadow_map_target(facade, &self.camera)?;
+    let mut target =
+      self.light.shadow_map_target(&self.context, &self.camera)?;
     target.clear();
 
     for object in &self.objects {
@@ -133,6 +126,7 @@ impl Scene {
     for object in &mut self.objects {
       object.reload_shader(facade)?;
     }
+    self.shadow_map_visual.1.reload_shader(facade)?;
     Ok(())
   }
 }

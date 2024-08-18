@@ -1,5 +1,8 @@
 use glium::{glutin::surface::WindowSurface, Display};
-use winit::window::Window;
+use winit::{
+  raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+  window::Window,
+};
 
 // I would use glutin::SimpleWindowBuilder but it has no way to turn
 // on debug with the public API.
@@ -12,10 +15,9 @@ pub fn init_display(window: &Window) -> Display<WindowSurface> {
       surface::SurfaceAttributesBuilder,
     },
   };
-  use raw_window_handle::{HasRawDisplayHandle as _, HasRawWindowHandle as _};
 
-  let display_handle = window.raw_display_handle();
-  let window_handle = window.raw_window_handle();
+  let display_handle = window.display_handle().unwrap().as_raw();
+  let window_handle = window.window_handle().unwrap().as_raw();
 
   let disp = unsafe {
     glium::glutin::display::Display::new(

@@ -227,6 +227,11 @@ impl App {
       }
 
       self.window.request_redraw();
+    } else if event.logical_key.to_text() == Some("s") {
+      if let Some(scene) = &mut self.world.scene {
+        scene.toggle_shadow_map_visual();
+      }
+      self.window.request_redraw();
     }
   }
 
@@ -344,12 +349,9 @@ fn main() -> Result<()> {
   app.world.set_axis(axis);
 
   // setup the scene
-  let mut scene = Scene::default();
+  let mut scene = Scene::new(&app.display)?;
   scene.add_object(Teapot::load(&app.display)?);
   scene.add_object(Plane::load(&app.display)?);
-
-  scene.init_light(&app.display)?;
-  scene.init_light_object(&app.display)?;
 
   app.world.set_scene(scene);
 
