@@ -1,0 +1,26 @@
+My implementation for the 7th project. This project renders a teapot on a plane with shadow enabled.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=7
+
+All CS6610 and optional requirements implemented. In addition, I also implemented the following extra features/optimization:
+
+- visualize shadow map for debugging
+- toggle between spot light and directional light
+- fix shadow acne and peter panning
+- border clamp for shadow maps
+- only render backface in shadow pass
+
+Controls:
+
+left drag: rotate camera
+right drag/wheel: change camera distance
+
+shift+left drag: rotate light position/direction
+
+x: toggle between directional light and spot light
+s: toggle shadow map visualization
+
+p: perspective/orthographic projection
+a: show/hide axis
+f6, r: reload shader
+esc: quit
