@@ -21,6 +21,7 @@ out vec4 shadow_pos; // in shadow texture space
 
 void main()
 {
+  vec3 pos_w = (m * vec4(pos, 1.0)).xyz;
   gl_Position = mvp * vec4(pos, 1.0);
 
   pos_v = (mv * vec4(pos, 1.0)).xyz;
@@ -34,9 +35,8 @@ void main()
   case 0: // directional light
     light_dir_raw = normalize((v * vec4(light_dir_or_loc, 0.0)).xyz);
     break;
-  case 1: // point light
-  case 2: // spot light
-    vec3 dir = normalize(light_dir_or_loc - pos_v);
+  case 1: // spot light
+    vec3 dir = normalize(light_dir_or_loc - pos_w);
     light_dir_raw = normalize((v * vec4(dir, 0.0)).xyz);
     break;
   }

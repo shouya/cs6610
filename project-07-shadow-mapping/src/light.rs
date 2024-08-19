@@ -6,7 +6,7 @@ use glium::{
   backend::Facade,
   framebuffer::SimpleFrameBuffer,
   implement_vertex,
-  texture::{DepthCubemap, DepthTexture2d, MipmapsOption},
+  texture::{DepthTexture2d, MipmapsOption},
   uniform,
   uniforms::DepthTextureComparison,
   DrawParameters, Program, Surface as _,
@@ -20,24 +20,30 @@ pub enum LightVariant {
   Directional {
     // direction towards the light
     dir: Vec3,
-    map: DepthTexture2d,
   },
-  #[allow(unused)]
-  Point { pos: Vec3, map: DepthCubemap },
-  #[allow(unused)]
   Spot {
     pos: Vec3,
     fov: f32,
-    map: DepthTexture2d,
   },
 }
 
 impl LightVariant {
-  fn new(facade: &impl Facade) -> Self {
+  fn new() -> Self {
     LightVariant::Directional {
       dir: Vec3::new(0.5, 1.0, 0.5).normalize(),
-      map: create_shadow_map(facade),
     }
+  }
+
+  fn toggle(&mut self) {
+    *self = match *self {
+      LightVariant::Directional { dir } => LightVariant::Spot {
+        pos: dir * 2.0,
+        fov: 60f32.to_radians(),
+      },
+      LightVariant::Spot { pos, .. } => LightVariant::Directional {
+        dir: pos.normalize(),
+      },
+    };
   }
 
   fn light_uniforms(
@@ -46,18 +52,15 @@ impl LightVariant {
   ) -> impl glium::uniforms::Uniforms + '_ {
     let typ: i32 = match *self {
       LightVariant::Directional { .. } => 0,
-      LightVariant::Point { .. } => 1,
-      LightVariant::Spot { .. } => 2,
+      LightVariant::Spot { .. } => 1,
     };
     let dir_or_loc: Vec3 = match *self {
       LightVariant::Directional { dir, .. } => dir,
-      LightVariant::Point { pos, .. } => pos,
       LightVariant::Spot { pos, .. } => pos,
     };
     let cone_angle: f32 = match self {
       LightVariant::Directional { .. } => 0.0,
-      LightVariant::Point { .. } => 0.0,
-      LightVariant::Spot { fov, .. } => fov.to_radians().cos(),
+      LightVariant::Spot { fov, .. } => *fov,
     };
 
     uniform! {
@@ -68,33 +71,27 @@ impl LightVariant {
     }
   }
 
-  fn shadow_uniforms(
-    &self,
+  fn shadow_uniforms<'a>(
+    &'a self,
     camera: &Camera,
-  ) -> impl glium::uniforms::Uniforms + '_ {
-    match self {
-      LightVariant::Directional { map, .. } => {
-        let camera = self.shadow_space_camera(camera);
-        let transform = Mat4::from_translation(Vec3::new(0.5, 0.5, 0.5))
-          * Mat4::from_scale(Vec3::new(0.5, 0.5, 0.5));
-        let vp = transform * camera.view_projection();
+    map: &'a DepthTexture2d,
+  ) -> impl glium::uniforms::Uniforms + 'a {
+    let camera = self.shadow_space_camera(camera);
+    let transform = Mat4::from_translation(Vec3::new(0.5, 0.5, 0.5))
+      * Mat4::from_scale(Vec3::new(0.5, 0.5, 0.5));
+    let vp = transform * camera.view_projection();
 
-        let sampled_shadow_map = map
-          .sampled()
-          .depth_texture_comparison(Some(DepthTextureComparison::LessOrEqual))
-          .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-          .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)
-          .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp)
-          .border_color(Some([0.0, 0.0, 0.0, 1.0]));
+    let sampled_shadow_map = map
+      .sampled()
+      .depth_texture_comparison(Some(DepthTextureComparison::LessOrEqual))
+      .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)
+      .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp)
+      .border_color(Some([0.0, 0.0, 0.0, 1.0]));
 
-        uniform! {
-          shadow_map: sampled_shadow_map,
-          shadow_transform: vp.to_cols_array_2d(),
-        }
-      }
-      _ => {
-        panic!("Not implemented");
-      }
+    uniform! {
+      shadow_map: sampled_shadow_map,
+      shadow_transform: vp.to_cols_array_2d(),
     }
   }
 
@@ -107,8 +104,10 @@ impl LightVariant {
         let proj = crate::Projection::Custom(proj);
         Camera::new(Vec3::ZERO, -*dir, proj, 1.0)
       }
-      _ => {
-        panic!("Not implemented");
+      LightVariant::Spot { pos, fov } => {
+        let proj = Mat4::perspective_rh_gl(*fov, 1.0, 0.1, 100.0);
+        let proj = crate::Projection::Custom(proj);
+        Camera::new(*pos, Vec3::ZERO, proj, 1.0)
       }
     }
   }
@@ -162,6 +161,7 @@ pub struct Light {
   // each component can be greater than one. pre-multiplied by intensity.
   color: Vec3,
   variant: LightVariant,
+  map: DepthTexture2d,
   program: Rc<glium::Program>,
 }
 
@@ -172,9 +172,14 @@ impl Light {
     let program = load_program(SHADER_PATH, facade)?;
     Ok(Self {
       color: Vec3::ONE,
-      variant: LightVariant::new(facade),
+      variant: LightVariant::new(),
+      map: create_shadow_map(facade),
       program: Rc::new(program),
     })
+  }
+
+  pub fn toggle_light_variant(&mut self) {
+    self.variant.toggle();
   }
 
   pub fn color(&self) -> Vec3 {
@@ -187,20 +192,18 @@ impl Light {
   ) -> impl glium::uniforms::Uniforms + '_ {
     OwnedMergedUniform::new(
       self.variant.light_uniforms(self.color),
-      self.variant.shadow_uniforms(camera),
+      self.variant.shadow_uniforms(camera, &self.map),
     )
   }
 
   pub fn light_object_transform(&self) -> Transform {
     let position = match self.variant {
       LightVariant::Directional { dir, .. } => dir * 2.0,
-      LightVariant::Point { pos, .. } => pos,
       LightVariant::Spot { pos, .. } => pos,
     };
 
     let dir = match self.variant {
       LightVariant::Directional { dir, .. } => dir.normalize(),
-      LightVariant::Point { pos, .. } => pos.normalize(),
       LightVariant::Spot { pos, .. } => pos.normalize(),
     };
 
@@ -217,9 +220,6 @@ impl Light {
       LightVariant::Directional { ref mut dir, .. } => {
         *dir = rot * *dir;
       }
-      LightVariant::Point { ref mut pos, .. } => {
-        *pos = rot * *pos;
-      }
       LightVariant::Spot { ref mut pos, .. } => {
         *pos = rot * *pos;
       }
@@ -231,81 +231,47 @@ impl Light {
     facade: &impl Facade,
     camera: &Camera,
   ) -> Result<ShadowMapFramebuffer<'_>> {
-    match &self.variant {
-      LightVariant::Directional { map, .. } => {
-        let camera = self.variant.shadow_space_camera(camera);
-        let framebuffer = SimpleFrameBuffer::depth_only(facade, map)?;
+    let camera = self.variant.shadow_space_camera(camera);
+    let framebuffer = SimpleFrameBuffer::depth_only(facade, &self.map)?;
 
-        Ok(ShadowMapFramebuffer::Single {
-          camera: Box::new(camera),
-          framebuffer: Box::new(framebuffer),
-          program: &self.program,
-        })
-      }
-      _ => {
-        panic!("Not implemented");
-      }
-    }
+    Ok(ShadowMapFramebuffer {
+      camera: Box::new(camera),
+      framebuffer: Box::new(framebuffer),
+      program: &self.program,
+    })
   }
 }
 
-pub enum ShadowMapFramebuffer<'a> {
-  Single {
-    camera: Box<Camera>,
-    framebuffer: Box<SimpleFrameBuffer<'a>>,
-    program: &'a glium::Program,
-  },
-  Cube {
-    cameras: Box<[Camera; 6]>,
-    framebuffers: Box<[SimpleFrameBuffer<'a>; 6]>,
-    program: &'a glium::Program,
-  },
+pub struct ShadowMapFramebuffer<'a> {
+  camera: Box<Camera>,
+  framebuffer: Box<SimpleFrameBuffer<'a>>,
+  program: &'a glium::Program,
 }
 
 impl<'a> ShadowMapFramebuffer<'a> {
   pub fn clear(&mut self) {
-    match self {
-      ShadowMapFramebuffer::Single { framebuffer, .. } => {
-        framebuffer.clear_depth(1.0);
-      }
-      ShadowMapFramebuffer::Cube { framebuffers, .. } => {
-        for framebuffer in framebuffers.iter_mut() {
-          framebuffer.clear_depth(1.0);
-        }
-      }
-    }
+    self.framebuffer.clear_depth(1.0);
   }
 
   pub fn draw_object(&mut self, object: &Object) {
-    match self {
-      ShadowMapFramebuffer::Single {
-        framebuffer,
-        camera,
-        program,
-      } => {
-        let params = DrawParameters {
-          depth: glium::Depth {
-            test: glium::draw_parameters::DepthTest::IfLess,
-            write: true,
-            ..Default::default()
-          },
-          backface_culling:
-            glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
-          ..Default::default()
-        };
+    let params = DrawParameters {
+      depth: glium::Depth {
+        test: glium::draw_parameters::DepthTest::IfLess,
+        write: true,
+        ..Default::default()
+      },
+      backface_culling:
+        glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
+      ..Default::default()
+    };
 
-        object.draw_with_program(
-          framebuffer.as_mut(),
-          camera,
-          program,
-          DynUniforms::new(),
-          Some(params),
-        );
-      }
-      ShadowMapFramebuffer::Cube { .. } => {
-        // TODO: draw cubemap with different camera
-      }
-    }
+    object.draw_with_program(
+      self.framebuffer.as_mut(),
+      &self.camera,
+      self.program,
+      DynUniforms::new(),
+      Some(params),
+    );
   }
 }
 
@@ -372,12 +338,8 @@ impl ShadowMapVisual {
     target: &mut impl glium::Surface,
     light: &Light,
   ) -> Result<()> {
-    let shadow_map = match &light.variant {
-      LightVariant::Directional { map, .. } => map,
-      _ => todo!(),
-    };
-
-    let sampler = shadow_map
+    let sampler = light
+      .map
       .sampled()
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
       .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)

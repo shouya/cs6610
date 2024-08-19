@@ -205,6 +205,7 @@ impl App {
     if !event.state.is_pressed() {
       return;
     }
+
     if event.logical_key == NamedKey::Escape {
       self.event_loop.send_event(UserSignal::Quit).unwrap();
     } else if event.logical_key.to_text() == Some("p") {
@@ -227,10 +228,10 @@ impl App {
       }
 
       self.window.request_redraw();
-    } else if event.logical_key.to_text() == Some("s") {
-      if let Some(scene) = &mut self.world.scene {
-        scene.toggle_shadow_map_visual();
-      }
+    }
+
+    if let Some(scene) = &mut self.world.scene {
+      scene.handle_key(event);
       self.window.request_redraw();
     }
   }

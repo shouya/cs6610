@@ -59,6 +59,20 @@ impl Scene {
     self.camera.update_view();
   }
 
+  pub fn handle_key(&mut self, key: winit::event::KeyEvent) {
+    let key = key.logical_key.to_text();
+
+    match key {
+      Some("s") => {
+        self.shadow_map_visual.0 = !self.shadow_map_visual.0;
+      }
+      Some("x") => {
+        self.light.toggle_light_variant();
+      }
+      _ => {}
+    }
+  }
+
   pub fn update_view(&mut self) {
     self.camera.update_view()
   }
@@ -74,10 +88,6 @@ impl Scene {
 
   pub fn add_object(&mut self, teapot: Object) {
     self.objects.push(teapot);
-  }
-
-  pub fn toggle_shadow_map_visual(&mut self) {
-    self.shadow_map_visual.0 = !self.shadow_map_visual.0;
   }
 }
 

@@ -137,8 +137,8 @@ impl Camera {
           self.aspect,
           -1.0,
           1.0,
-          -1.0,
-          1.0,
+          -10.0,
+          10.0,
         );
         scale * proj
       }
