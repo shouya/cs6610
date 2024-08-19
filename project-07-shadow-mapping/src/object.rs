@@ -157,7 +157,7 @@ impl Object {
   pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
     if let Some(program) = &self.program {
       let light_uniforms = light.uniforms(camera);
-      self.draw_with_program(frame, camera, program, light_uniforms);
+      self.draw_with_program(frame, camera, program, light_uniforms, None);
     } else {
       eprintln!("GPUObject::draw: program is not loaded");
     }
@@ -169,6 +169,7 @@ impl Object {
     camera: &Camera,
     program: &Program,
     uniforms: impl Uniforms,
+    draw_params: Option<DrawParameters>,
   ) {
     let m: Mat4 = self.model();
     let v: Mat4 = camera.view();
@@ -187,14 +188,16 @@ impl Object {
     };
     let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
 
-    let draw_params = DrawParameters {
+    let draw_params = draw_params.unwrap_or_else(|| DrawParameters {
       depth: glium::Depth {
         test: glium::draw_parameters::DepthTest::IfLess,
         write: true,
         ..Default::default()
       },
+      backface_culling:
+        glium::draw_parameters::BackfaceCullingMode::CullClockwise,
       ..Default::default()
-    };
+    });
 
     self.mesh.draw(frame, program, &uniforms, &draw_params);
   }

@@ -8,8 +8,6 @@ out vec2 uv_t; // in texture space
 out vec3 pos_v; // in view space
 out vec3 n_v; // in view space
 
-out vec3 orig_pos; // in model space
-
 uniform mat4 mv, mvp, v, m;
 uniform mat3 mv3, mv_n; // for transforming vertex normals
 
@@ -23,7 +21,6 @@ out vec4 shadow_pos; // in shadow texture space
 
 void main()
 {
-  orig_pos = pos;
   gl_Position = mvp * vec4(pos, 1.0);
 
   pos_v = (mv * vec4(pos, 1.0)).xyz;
@@ -32,7 +29,6 @@ void main()
   uv_t = uv;
 
   shadow_pos = (shadow_transform * m * vec4(pos, 1.0));
-  shadow_pos.z -= 0.001;
 
   switch (light_type) {
   case 0: // directional light

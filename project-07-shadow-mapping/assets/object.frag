@@ -11,7 +11,7 @@ uniform vec3 Kd, Ks, Ka;
 uniform float Ns; // shininess
 
 // textures
-uniform sampler2D map_Kd, map_Ks, map_Ka;
+uniform sampler2D map_Kd, map_Ks, map_Ka, bump_map;
 uniform uint use_map_Kd, use_map_Ks, use_map_Ka;
 
 // in view space
@@ -30,9 +30,17 @@ void main() {
   // geometry term
   float geom = max(dot(n_v, light_dir), 0.0);
 
-  // half vector
-  vec3 h = normalize(light_dir + view_dir);
-  float spec = pow(max(dot(n_v, h), 0.0), Ns);
+  float shadow;
+  if (geom <= 0.0) {
+    // fix shadow acne on the back surfaces
+    shadow = 1;
+  } else {
+    vec3 shadow_uv = shadow_pos.xyz;
+    float bias = mix(0.001, 0.0001, geom);
+    shadow_uv.z -= bias;
+    shadow_uv = shadow_uv.xyz / shadow_pos.w;
+    shadow = texture(shadow_map, shadow_uv);
+  }
 
   vec3 oKd;
   if (use_map_Kd == 1u) {
@@ -41,6 +49,9 @@ void main() {
     oKd = Kd;
   }
 
+  // half vector
+  vec3 h = normalize(light_dir + view_dir);
+  float spec = pow(max(dot(n_v, h), 0.0), Ns);
   vec3 oKs;
   if (use_map_Ks == 1u) {
     oKs = texture(map_Ks, uv_t).rgb * Ks;
@@ -55,8 +66,7 @@ void main() {
     oKa = Ka;
   }
 
-  vec3 rgb = light_color * (geom * oKd + spec * oKs) + oKa;
-  float shadow = texture(shadow_map, shadow_pos.xyz);
+  vec3 rgb = light_color * 2 * (geom * oKd + spec * oKs) * shadow + oKa * 0.3;
 
-  color = vec4(rgb * shadow, 1.0);
+  color = vec4(rgb, 1.0);
 }

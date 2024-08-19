@@ -6,7 +6,7 @@ use glium::{
   backend::Facade,
   framebuffer::SimpleFrameBuffer,
   implement_vertex,
-  texture::{DepthCubemap, DepthTexture2d},
+  texture::{DepthCubemap, DepthTexture2d, MipmapsOption},
   uniform,
   uniforms::DepthTextureComparison,
   DrawParameters, Program, Surface as _,
@@ -14,7 +14,7 @@ use glium::{
 
 use crate::{transform::Transform, Camera, Object, Result};
 
-const SHADOW_MAP_RESOLUTION: u32 = 4096;
+const SHADOW_MAP_RESOLUTION: u32 = 8196;
 
 pub enum LightVariant {
   Directional {
@@ -282,12 +282,26 @@ impl<'a> ShadowMapFramebuffer<'a> {
         framebuffer,
         camera,
         program,
-      } => object.draw_with_program(
-        framebuffer.as_mut(),
-        camera,
-        program,
-        DynUniforms::new(),
-      ),
+      } => {
+        let params = DrawParameters {
+          depth: glium::Depth {
+            test: glium::draw_parameters::DepthTest::IfLess,
+            write: true,
+            ..Default::default()
+          },
+          backface_culling:
+            glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
+          ..Default::default()
+        };
+
+        object.draw_with_program(
+          framebuffer.as_mut(),
+          camera,
+          program,
+          DynUniforms::new(),
+          Some(params),
+        );
+      }
       ShadowMapFramebuffer::Cube { .. } => {
         // TODO: draw cubemap with different camera
       }
@@ -296,8 +310,14 @@ impl<'a> ShadowMapFramebuffer<'a> {
 }
 
 fn create_shadow_map(facade: &impl Facade) -> DepthTexture2d {
-  DepthTexture2d::empty(facade, SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION)
-    .unwrap()
+  DepthTexture2d::empty_with_format(
+    facade,
+    glium::texture::DepthFormat::I16,
+    MipmapsOption::NoMipmap,
+    SHADOW_MAP_RESOLUTION,
+    SHADOW_MAP_RESOLUTION,
+  )
+  .unwrap()
 }
 
 #[derive(Copy, Clone)]
@@ -322,19 +342,19 @@ impl ShadowMapVisual {
     let verts = [
       Vertex {
         pos: [-1.0, -1.0],
-        uv: [0.0, 0.0],
+        uv: [-0.1, -0.1],
       },
       Vertex {
         pos: [1.0, -1.0],
-        uv: [1.0, 0.0],
+        uv: [1.1, -0.1],
       },
       Vertex {
         pos: [-1.0, 1.0],
-        uv: [0.0, 1.0],
+        uv: [-0.1, 1.1],
       },
       Vertex {
         pos: [1.0, 1.0],
-        uv: [1.0, 1.0],
+        uv: [1.1, 1.1],
       },
     ];
     let vbo = glium::VertexBuffer::new(facade, &verts)?;
