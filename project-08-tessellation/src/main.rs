@@ -3,13 +3,14 @@ mod light;
 mod mesh;
 mod object;
 mod scene;
+mod teapot_quad;
 mod transform;
 
 use std::{fmt::Debug, time::Duration};
 
 use glium::{glutin::surface::WindowSurface, Display, Surface as _};
-use object::Plane;
 use scene::Scene;
+use teapot_quad::TeapotQuad;
 use winit::{
   dpi::{LogicalSize, PhysicalSize},
   event::{DeviceId, Event, KeyEvent, WindowEvent},
@@ -351,8 +352,7 @@ fn main() -> Result<()> {
 
   // setup the scene
   let mut scene = Scene::new(&app.display)?;
-  scene.add_object(Teapot::load(&app.display)?);
-  scene.add_object(Plane::load(&app.display)?);
+  scene.set_quad(TeapotQuad::new(&app.display)?);
 
   app.world.set_scene(scene);
 

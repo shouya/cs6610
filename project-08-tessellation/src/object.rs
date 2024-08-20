@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use common::{asset_path, load_program, teapot_path, MergedUniform};
+use common::{
+  asset_path, load_program, teapot_path, Draw, HasProgram, HasShadow,
+  MergedUniform,
+};
 use glam::{Mat3, Mat4, Quat, Vec3};
 use glium::backend::Facade;
 use glium::uniforms::Uniforms;
@@ -36,6 +39,7 @@ impl Teapot {
 pub struct Plane;
 
 impl Plane {
+  #[allow(unused)]
   pub fn load(facade: &impl Facade) -> Result<Object> {
     let model_path = asset_path("plane.obj");
     let object = Object::load(&model_path, &SHADER_PATH, facade)?;
@@ -154,52 +158,20 @@ impl Object {
     self.transform.to_mat4()
   }
 
-  pub fn draw(&self, frame: &mut impl Surface, camera: &Camera, light: &Light) {
-    if let Some(program) = &self.program {
-      let light_uniforms = light.uniforms(camera);
-      self.draw_with_program(frame, camera, program, light_uniforms, None);
-    } else {
-      eprintln!("GPUObject::draw: program is not loaded");
-    }
-  }
-
-  pub fn draw_with_program(
+  pub fn draw(
     &self,
     frame: &mut impl Surface,
     camera: &Camera,
-    program: &Program,
-    uniforms: impl Uniforms,
-    draw_params: Option<DrawParameters>,
-  ) {
-    let m: Mat4 = self.model();
-    let v: Mat4 = camera.view();
-    let mv: Mat4 = v * m;
-    let mv3: Mat3 = Mat3::from_mat4(mv);
-    let mv_n: Mat3 = mv3.inverse().transpose();
-    let mvp: Mat4 = camera.projection() * mv;
+    light: &Light,
+  ) -> Result<()> {
+    if let Some(program) = &self.program {
+      let light_uniforms = light.uniforms(camera);
+      self.draw_raw(frame, camera, program, light_uniforms, None)?;
+    } else {
+      eprintln!("GPUObject::draw: program is not loaded");
+    }
 
-    let model_uniforms = uniform! {
-      v: v.to_cols_array_2d(),
-      m: m.to_cols_array_2d(),
-      mvp: mvp.to_cols_array_2d(),
-      mv: mv.to_cols_array_2d(),
-      mv3: mv3.to_cols_array_2d(),
-      mv_n: mv_n.to_cols_array_2d(),
-    };
-    let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
-
-    let draw_params = draw_params.unwrap_or_else(|| DrawParameters {
-      depth: glium::Depth {
-        test: glium::draw_parameters::DepthTest::IfLess,
-        write: true,
-        ..Default::default()
-      },
-      backface_culling:
-        glium::draw_parameters::BackfaceCullingMode::CullClockwise,
-      ..Default::default()
-    });
-
-    self.mesh.draw(frame, program, &uniforms, &draw_params);
+    Ok(())
   }
 
   pub fn world_pos(&self) -> Vec3 {
@@ -229,5 +201,58 @@ impl Object {
   pub fn receive_no_shadow(mut self) -> Self {
     self.receive_shadow = false;
     self
+  }
+}
+
+impl HasProgram for Object {
+  fn program(&self) -> &glium::Program {
+    self.program.as_ref().unwrap()
+  }
+}
+
+impl HasShadow for Object {}
+
+impl Draw for Object {
+  fn draw_raw(
+    &self,
+    frame: &mut impl glium::Surface,
+    camera: &impl common::CameraLike,
+    program: &glium::Program,
+    uniforms: impl Uniforms,
+    draw_params: Option<DrawParameters>,
+  ) -> Result<()> {
+    let m: Mat4 = self.model();
+    let v = Mat4::from_cols_array_2d(&camera.view());
+    let p = Mat4::from_cols_array_2d(&camera.projection());
+
+    let mv: Mat4 = v * m;
+    let mv3: Mat3 = Mat3::from_mat4(mv);
+    let mv_n: Mat3 = mv3.inverse().transpose();
+    let mvp: Mat4 = p * mv;
+
+    let model_uniforms = uniform! {
+      m: m.to_cols_array_2d(),
+      m: m.to_cols_array_2d(),
+      v: v.to_cols_array_2d(),
+      mvp: mvp.to_cols_array_2d(),
+      mv: mv.to_cols_array_2d(),
+      mv3: mv3.to_cols_array_2d(),
+      mv_n: mv_n.to_cols_array_2d(),
+    };
+    let uniforms = MergedUniform::new(&uniforms, &model_uniforms);
+
+    let draw_params = draw_params.unwrap_or_else(|| DrawParameters {
+      depth: glium::Depth {
+        test: glium::draw_parameters::DepthTest::IfLess,
+        write: true,
+        ..Default::default()
+      },
+      backface_culling:
+        glium::draw_parameters::BackfaceCullingMode::CullClockwise,
+      ..Default::default()
+    });
+
+    self.mesh.draw(frame, program, &uniforms, &draw_params);
+    Ok(())
   }
 }

@@ -27,7 +27,6 @@ impl<'a> DynUniforms<'a> {
     if self.uniforms.contains_key(name) {
       return;
     }
-
     self.add_override(name, value);
   }
 

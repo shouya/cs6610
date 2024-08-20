@@ -5,7 +5,8 @@ use glium::backend::Context;
 use winit::keyboard::ModifiersState;
 
 use crate::{
-  light::ShadowMapVisual, object::LightObject, Camera, Light, Object, Result,
+  light::ShadowMapVisual, object::LightObject, teapot_quad::TeapotQuad, Camera,
+  Light, Object, Result,
 };
 
 pub struct Scene {
@@ -26,7 +27,7 @@ impl Scene {
     Ok(Self {
       light: Light::new(facade)?,
       camera: Camera::default(),
-      objects: Vec::new(),
+      teapot_quad: None,
       light_obj: LightObject::load(facade)?,
       shadow_map_visual: (false, ShadowMapVisual::new(facade)?),
       context: facade.get_context().clone(),
@@ -69,6 +70,16 @@ impl Scene {
       Some("x") => {
         self.light.toggle_light_variant();
       }
+      Some("+") => {
+        if let Some(quad) = &mut self.teapot_quad {
+          quad.update_tess_level(1);
+        }
+      }
+      Some("-") => {
+        if let Some(quad) = &mut self.teapot_quad {
+          quad.update_tess_level(-1);
+        }
+      }
       _ => {}
     }
   }
@@ -78,16 +89,16 @@ impl Scene {
   }
 
   pub fn update(&mut self, dt: &Duration) {
-    for object in &mut self.objects {
-      object.update(dt);
+    if let Some(quad) = &mut self.teapot_quad {
+      quad.update(dt);
     }
 
     self.sync_light_obj();
     self.light_obj.update(dt);
   }
 
-  pub fn add_object(&mut self, teapot: Object) {
-    self.objects.push(teapot);
+  pub fn set_quad(&mut self, quad: TeapotQuad) {
+    self.teapot_quad = Some(quad);
   }
 }
 
@@ -101,15 +112,17 @@ impl Scene {
     }
 
     self.draw_objects(frame)?;
-    self.light_obj.draw(frame, &self.camera, &self.light);
+    self.light_obj.draw(frame, &self.camera, &self.light)?;
 
     Ok(())
   }
 
   fn draw_objects(&self, frame: &mut glium::Frame) -> Result<()> {
-    for object in &self.objects {
-      object.draw(frame, &self.camera, &self.light);
+    if let Some(quad) = &self.teapot_quad {
+      quad.draw(frame, &self.camera, &self.light)?;
+      quad.draw_wireframe(frame, &self.camera, &self.light)?;
     }
+
     Ok(())
   }
 
@@ -118,8 +131,8 @@ impl Scene {
       self.light.shadow_map_target(&self.context, &self.camera)?;
     target.clear();
 
-    for object in &self.objects {
-      target.draw_object(object);
+    if let Some(quad) = &self.teapot_quad {
+      target.draw_object(quad)?;
     }
 
     Ok(())
@@ -133,8 +146,8 @@ impl Scene {
     &mut self,
     facade: &impl glium::backend::Facade,
   ) -> Result<()> {
-    for object in &mut self.objects {
-      object.reload_shader(facade)?;
+    if let Some(quad) = &mut self.teapot_quad {
+      quad.reload_shader(facade)?;
     }
     self.shadow_map_visual.1.reload_shader(facade)?;
     Ok(())

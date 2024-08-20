@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 
+use common::CameraLike;
 use glam::{EulerRot, Mat3, Mat4, Quat, Vec3};
 
 pub enum Projection {
@@ -187,5 +188,15 @@ impl Camera {
   // handle view update by recomputing the matrices
   pub fn update_view(&mut self) {
     self.cache.borrow_mut().take();
+  }
+}
+
+impl CameraLike for Camera {
+  fn view(&self) -> [[f32; 4]; 4] {
+    self.view().to_cols_array_2d()
+  }
+
+  fn projection(&self) -> [[f32; 4]; 4] {
+    self.projection().to_cols_array_2d()
   }
 }

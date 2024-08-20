@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use common::{load_program, DynUniforms, OwnedMergedUniform};
+use common::{load_program, Draw, DynUniforms, HasShadow, OwnedMergedUniform};
 use glam::{Mat3, Mat4, Quat, Vec3, Vec4Swizzles as _};
 use glium::{
   backend::Facade,
@@ -12,7 +12,7 @@ use glium::{
   DrawParameters, Program, Surface as _,
 };
 
-use crate::{transform::Transform, Camera, Object, Result};
+use crate::{transform::Transform, Camera, Result};
 
 const SHADOW_MAP_RESOLUTION: u32 = 8196;
 
@@ -253,7 +253,13 @@ impl<'a> ShadowMapFramebuffer<'a> {
     self.framebuffer.clear_depth(1.0);
   }
 
-  pub fn draw_object(&mut self, object: &Object) {
+  pub fn draw_object<O>(&mut self, object: &O) -> Result<()>
+  where
+    O: Draw + HasShadow,
+  {
+    if !object.casts_shadow() {
+      return Ok(());
+    }
     let params = DrawParameters {
       depth: glium::Depth {
         test: glium::draw_parameters::DepthTest::IfLess,
@@ -265,13 +271,17 @@ impl<'a> ShadowMapFramebuffer<'a> {
       ..Default::default()
     };
 
-    object.draw_with_program(
+    let program = object.shadow_program().unwrap_or(self.program);
+
+    object.draw_raw(
       self.framebuffer.as_mut(),
-      &self.camera,
-      self.program,
+      self.camera.as_ref(),
+      program,
       DynUniforms::new(),
       Some(params),
-    );
+    )?;
+
+    Ok(())
   }
 }
 

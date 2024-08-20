@@ -1,4 +1,5 @@
 use glam::{Mat3, Mat4, Quat, Vec3};
+use glium::uniforms::AsUniformValue;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Transform {
@@ -6,6 +7,12 @@ pub struct Transform {
   // euler angle xyz, in radians
   pub rotation: Quat,
   pub scale: Vec3,
+}
+
+impl AsUniformValue for Transform {
+  fn as_uniform_value(&self) -> glium::uniforms::UniformValue<'_> {
+    glium::uniforms::UniformValue::Mat4(self.to_mat4().to_cols_array_2d())
+  }
 }
 
 impl Transform {

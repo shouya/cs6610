@@ -4,6 +4,7 @@ mod glium_helper;
 pub mod math;
 pub mod mesh;
 pub mod obj_loader;
+pub mod render;
 
 use std::path::PathBuf;
 
@@ -12,6 +13,7 @@ pub use glium_helper::{
   load_program, to_raw_image, DynUniforms, MergedUniform, OwnedMergedUniform,
 };
 pub use obj_loader::{Group, Mtl, MtlLib, Obj, SimpleObj, VAIdx};
+pub use render::{CameraLike, Draw, HasProgram, HasShadow, ToUniforms};
 
 pub fn teapot_path() -> PathBuf {
   asset_path("teapot.obj")
