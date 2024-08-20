@@ -1,0 +1,15 @@
+[package]
+name = "project-08-tessellation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+glium = { workspace = true }
+winit = { workspace = true }
+glam = { workspace = true }
+image = { workspace = true }
+anyhow = { workspace = true }
+genmesh = { workspace = true }
+derive_more = "0.99.18"
+rand = "0.8.5"

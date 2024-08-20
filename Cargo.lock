@@ -1746,6 +1746,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "project-08-tessellation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common",
+ "derive_more",
+ "genmesh",
+ "glam",
+ "glium",
+ "image",
+ "rand 0.8.5",
+ "winit 0.29.15",
+]
+
+[[package]]
 name = "qoi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
