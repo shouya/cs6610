@@ -3,12 +3,18 @@
 
 layout(quads, equal_spacing, ccw) in;
 
-in vec2 texCoordTCS[];
-out vec2 texCoord;
+in VertData {
+  vec3 pos;
+  vec2 uv;
+} from_tcs[];
 
-vec4 interpolate4(vec4 v0, vec4 v1, vec4 v2, vec4 v3) {
-  vec4 a = mix(v0, v1, gl_TessCoord.x);
-  vec4 b = mix(v2, v3, gl_TessCoord.x);
+out vec2 uv;
+out vec3 pos_v;
+out vec3 light_dir_v;
+
+vec3 interpolate3(vec3 v0, vec3 v1, vec3 v2, vec3 v3) {
+  vec3 a = mix(v0, v1, gl_TessCoord.x);
+  vec3 b = mix(v2, v3, gl_TessCoord.x);
   return mix(a, b, gl_TessCoord.y);
 }
 
@@ -18,14 +24,44 @@ vec2 interpolate2(vec2 v0, vec2 v1, vec2 v2, vec2 v3) {
   return mix(a, b, gl_TessCoord.y);
 }
 
-void main(void) {
-  gl_Position = interpolate4( gl_in[0].gl_Position,
-                              gl_in[1].gl_Position,
-                              gl_in[2].gl_Position,
-                              gl_in[3].gl_Position );
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 
-  texCoord = interpolate2( texCoordTCS[0],
-                           texCoordTCS[1],
-                           texCoordTCS[2],
-                           texCoordTCS[3] );
+// in world space
+uniform vec3 light_dir_or_loc;
+uniform int light_type;
+
+uniform sampler2D displacement_map;
+uniform sampler2D normal_map;
+
+void main(void) {
+  uv = interpolate2( from_tcs[0].uv,
+                     from_tcs[1].uv,
+                     from_tcs[2].uv,
+                     from_tcs[3].uv );
+
+  vec3 pos_m = interpolate3( from_tcs[0].pos,
+                             from_tcs[1].pos,
+                             from_tcs[2].pos,
+                             from_tcs[3].pos );
+
+  vec3 normal_m = normalize(texture(normal_map, uv).xyz);
+  float disp = texture(displacement_map, uv).r;
+  pos_m.z += disp * 0.5;
+
+  vec4 pos_w = (model * vec4(pos_m, 1.0));
+  gl_Position = projection * view * pos_w;
+
+  pos_v = (view * pos_w).xyz;
+
+  switch (light_type) {
+  case 0: // directional light
+    light_dir_v = normalize((view * vec4(light_dir_or_loc, 0.0)).xyz);
+    break;
+  case 1: // spot light
+    vec3 dir_w = normalize(light_dir_or_loc - pos_w.xyz);
+    light_dir_v = normalize((view * vec4(dir_w, 0.0)).xyz);
+    break;
+  }
 }

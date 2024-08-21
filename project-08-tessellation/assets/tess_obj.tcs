@@ -3,8 +3,15 @@
 
 layout(vertices = 4) out;
 
-in vec2 texCoord[];
-out vec2 texCoordTCS[];
+in VertData {
+  vec3 pos;
+  vec2 uv;
+} from_vs[];
+
+out VertData {
+  vec3 pos;
+  vec2 uv;
+} to_tes[];
 
 uniform float tess_level_inner;
 uniform float tess_level_outer;
@@ -20,6 +27,5 @@ void main() {
     gl_TessLevelInner[1] = tess_level_inner;
   }
 
-  gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
-  texCoordTCS[gl_InvocationID] = texCoord[gl_InvocationID];
+  to_tes[gl_InvocationID] = from_vs[gl_InvocationID];
 }

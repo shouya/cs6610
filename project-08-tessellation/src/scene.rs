@@ -13,6 +13,7 @@ pub struct Scene {
   pub light: Light,
   pub camera: Camera,
   pub teapot_quad: Option<TeapotQuad>,
+  pub show_wireframe: bool,
   // tracking the position and orientation of the light
   pub light_obj: Object,
   // the boolean is used to toggle the shadow map visual
@@ -30,6 +31,7 @@ impl Scene {
       teapot_quad: None,
       light_obj: LightObject::load(facade)?,
       shadow_map_visual: (false, ShadowMapVisual::new(facade)?),
+      show_wireframe: false,
       context: facade.get_context().clone(),
     })
   }
@@ -80,6 +82,9 @@ impl Scene {
           quad.update_tess_level(-1);
         }
       }
+      Some("w") => {
+        self.show_wireframe = !self.show_wireframe;
+      }
       _ => {}
     }
   }
@@ -120,7 +125,9 @@ impl Scene {
   fn draw_objects(&self, frame: &mut glium::Frame) -> Result<()> {
     if let Some(quad) = &self.teapot_quad {
       quad.draw(frame, &self.camera, &self.light)?;
-      quad.draw_wireframe(frame, &self.camera, &self.light)?;
+      if self.show_wireframe {
+        quad.draw_wireframe(frame, &self.camera, &self.light)?;
+      }
     }
 
     Ok(())

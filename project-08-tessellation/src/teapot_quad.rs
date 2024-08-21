@@ -4,7 +4,7 @@ use common::{
   to_raw_image, CameraLike, Draw, DynUniforms, HasShadow, MergedUniform,
   OwnedMergedUniform,
 };
-use glam::Mat4;
+use glam::{Mat3, Mat4};
 use glium::{
   backend::Facade,
   implement_vertex,
@@ -32,7 +32,7 @@ pub struct TeapotQuad {
   vbo: VertexBuffer<Vertex>,
   normal_map: Texture2d,
   model: Transform,
-  // bump_map: Option<Texture2d>,
+  displacement_map: Texture2d,
   program: Program,
   shadow_program: Program,
   wireframe_program: Program,
@@ -45,19 +45,19 @@ impl TeapotQuad {
     let verts = [
       Vertex {
         pos: [-1.0, -1.0, 0.0],
-        uv: [0.0, 0.0],
-      },
-      Vertex {
-        pos: [1.0, -1.0, 0.0],
-        uv: [1.0, 0.0],
-      },
-      Vertex {
-        pos: [-1.0, 1.0, 0.0],
         uv: [0.0, 1.0],
       },
       Vertex {
-        pos: [1.0, 1.0, 0.0],
+        pos: [1.0, -1.0, 0.0],
         uv: [1.0, 1.0],
+      },
+      Vertex {
+        pos: [-1.0, 1.0, 0.0],
+        uv: [0.0, 0.0],
+      },
+      Vertex {
+        pos: [1.0, 1.0, 0.0],
+        uv: [1.0, 0.0],
       },
     ];
     let vbo = VertexBuffer::new(facade, &verts)?;
@@ -68,8 +68,8 @@ impl TeapotQuad {
 
     let normal_map =
       load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
-    // let displacement_map =
-    //   load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
+    let displacement_map =
+      load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
 
     Ok(Self {
       model: Transform::default(),
@@ -78,8 +78,9 @@ impl TeapotQuad {
       shadow_program,
       wireframe_program,
       normal_map,
-      tess_level_outer: 1,
-      tess_level_inner: 1,
+      displacement_map,
+      tess_level_outer: 50,
+      tess_level_inner: 50,
     })
   }
 
@@ -126,15 +127,16 @@ impl TeapotQuad {
     Ok(())
   }
 
-  fn uniforms<'a>(&'a self, camera: &'a impl CameraLike) -> impl Uniforms + 'a {
-    let normal_map = self
-      .normal_map
-      .sampled()
-      .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear);
-
+  fn uniforms<'a>(
+    &'a self,
+    camera: &'a impl CameraLike,
+    program: &Program,
+  ) -> impl Uniforms + 'a {
     fn mat4_uniform(mat: &Mat4) -> UniformValue<'static> {
       glium::uniforms::UniformValue::Mat4(mat.to_cols_array_2d())
+    }
+    fn mat3_uniform(mat3: &Mat3) -> UniformValue<'static> {
+      glium::uniforms::UniformValue::Mat3(mat3.to_cols_array_2d())
     }
 
     let mut camera_uniforms = DynUniforms::new();
@@ -146,17 +148,40 @@ impl TeapotQuad {
     camera_uniforms.add_raw("view", mat4_uniform(&view));
     camera_uniforms.add_raw("projection", mat4_uniform(&proj));
 
-    let view_proj = proj * view;
-    camera_uniforms.add_raw("view_projection", mat4_uniform(&view_proj));
+    if program.get_uniform("view_projection").is_some() {
+      let view_proj = proj * view;
+      camera_uniforms.add_raw("view_projection", mat4_uniform(&view_proj));
+    }
 
-    let model_view_proj = view_proj * model;
-    camera_uniforms
-      .add_raw("model_view_projection", mat4_uniform(&model_view_proj));
+    if program.get_uniform("model_view_projection").is_some() {
+      let model_view_proj = proj * view * model;
+      camera_uniforms
+        .add_raw("model_view_projection", mat4_uniform(&model_view_proj));
+    }
+
+    if program.get_uniform("model_view_normal").is_some() {
+      let model_view = view * model;
+      let model_view_normal = Mat3::from_mat4(model_view).inverse().transpose();
+      camera_uniforms
+        .add_raw("model_view_normal", mat3_uniform(&model_view_normal));
+    }
+
+    let normal_map = self
+      .normal_map
+      .sampled()
+      .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear);
+    let displacement_map = self
+      .displacement_map
+      .sampled()
+      .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear);
 
     let extra_uniforms = uniform! {
       tess_level_inner: self.tess_level_inner as f32,
       tess_level_outer: self.tess_level_outer as f32,
       normal_map: normal_map,
+      displacement_map: displacement_map,
     };
 
     OwnedMergedUniform::new(camera_uniforms, extra_uniforms)
@@ -213,12 +238,15 @@ impl TeapotQuad {
   pub fn reload_shader(&mut self, facade: &impl Facade) -> Result<()> {
     self.program = Self::load_program(facade, false)?;
     self.wireframe_program = Self::load_wireframe_program(facade)?;
+    self.shadow_program = Self::load_program(facade, true)?;
     Ok(())
   }
 
   pub fn update_tess_level(&mut self, delta: isize) {
     self.tess_level_inner =
       (self.tess_level_inner as isize + delta).max(1) as usize;
+    self.tess_level_outer =
+      (self.tess_level_outer as isize + delta).max(1) as usize;
   }
 }
 
@@ -231,7 +259,7 @@ impl common::Draw for TeapotQuad {
     uniforms: impl glium::uniforms::Uniforms,
     draw_params: Option<DrawParameters>,
   ) -> Result<()> {
-    let own_uniforms = self.uniforms(camera);
+    let own_uniforms = self.uniforms(camera, program);
     let uniforms = MergedUniform::new(&uniforms, &own_uniforms);
     let params = draw_params.unwrap_or(default_draw_params());
 
