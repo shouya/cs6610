@@ -14,7 +14,7 @@ use glium::{
 
 use crate::{transform::Transform, Camera, Result};
 
-const SHADOW_MAP_RESOLUTION: u32 = 8196;
+const SHADOW_MAP_RESOLUTION: u32 = 1024;
 
 pub enum LightVariant {
   Directional {
@@ -30,7 +30,7 @@ pub enum LightVariant {
 impl LightVariant {
   fn new() -> Self {
     LightVariant::Directional {
-      dir: Vec3::new(0.5, 1.0, 0.5).normalize(),
+      dir: Vec3::new(2.1, 2.2, 1.0).normalize(),
     }
   }
 
@@ -85,9 +85,9 @@ impl LightVariant {
       .sampled()
       .depth_texture_comparison(Some(DepthTextureComparison::LessOrEqual))
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear)
+      .minify_filter(glium::uniforms::MinifySamplerFilter::Nearest)
       .wrap_function(glium::uniforms::SamplerWrapFunction::BorderClamp)
-      .border_color(Some([0.0, 0.0, 0.0, 1.0]));
+      .border_color(Some([1.0, 1.0, 1.0, 1.0]));
 
     uniform! {
       shadow_map: sampled_shadow_map,
@@ -98,7 +98,7 @@ impl LightVariant {
   fn shadow_space_camera(&self, camera: &Camera) -> Camera {
     match self {
       LightVariant::Directional { dir, .. } => {
-        let view = Mat4::look_at_rh(Vec3::ZERO, -*dir, Vec3::Y);
+        let view = Mat4::look_at_rh(*dir, Vec3::ZERO, Vec3::Y);
         // calculate orthographic projection based on camera frustum
         let proj = find_bounding_box_projection(camera, view);
         let proj = crate::Projection::Custom(proj);
@@ -154,7 +154,7 @@ fn find_bounding_box_projection(camera: &Camera, view: Mat4) -> Mat4 {
     max = max.max(corner);
   }
 
-  Mat4::orthographic_rh_gl(min.x, max.x, min.y, max.y, min.z, max.z)
+  Mat4::orthographic_rh_gl(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0)
 }
 
 pub struct Light {
@@ -210,12 +210,12 @@ impl Light {
     Transform {
       translation: position,
       scale: Vec3::splat(0.1),
-      rotation: Quat::from_rotation_arc_colinear(Vec3::X, -dir),
+      rotation: Quat::from_rotation_arc_colinear(Vec3::Z, -dir),
     }
   }
 
-  pub fn rotate(&mut self, dx: f32, _dy: f32) {
-    let rot = Mat3::from_rotation_y(dx * 0.1);
+  pub fn rotate(&mut self, dx: f32, dy: f32) {
+    let rot = Mat3::from_rotation_z(-dx * 0.01);
     match self.variant {
       LightVariant::Directional { ref mut dir, .. } => {
         *dir = rot * *dir;
@@ -266,8 +266,6 @@ impl<'a> ShadowMapFramebuffer<'a> {
         write: true,
         ..Default::default()
       },
-      backface_culling:
-        glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
       ..Default::default()
     };
 
@@ -288,7 +286,7 @@ impl<'a> ShadowMapFramebuffer<'a> {
 fn create_shadow_map(facade: &impl Facade) -> DepthTexture2d {
   DepthTexture2d::empty_with_format(
     facade,
-    glium::texture::DepthFormat::I16,
+    glium::texture::DepthFormat::I24,
     MipmapsOption::NoMipmap,
     SHADOW_MAP_RESOLUTION,
     SHADOW_MAP_RESOLUTION,

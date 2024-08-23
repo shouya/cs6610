@@ -62,8 +62,8 @@ impl TeapotQuad {
     ];
     let vbo = VertexBuffer::new(facade, &verts)?;
 
-    let program = Self::load_program(facade, false)?;
-    let shadow_program = Self::load_program(facade, true)?;
+    let program = Self::load_program(facade)?;
+    let shadow_program = Self::load_shadow_program(facade)?;
     let wireframe_program = Self::load_wireframe_program(facade)?;
 
     let normal_map =
@@ -79,8 +79,8 @@ impl TeapotQuad {
       wireframe_program,
       normal_map,
       displacement_map,
-      tess_level_outer: 50,
-      tess_level_inner: 50,
+      tess_level_outer: 18,
+      tess_level_inner: 18,
     })
   }
 
@@ -170,12 +170,12 @@ impl TeapotQuad {
       .normal_map
       .sampled()
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear);
+      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear);
     let displacement_map = self
       .displacement_map
       .sampled()
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::Linear);
+      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear);
 
     let extra_uniforms = uniform! {
       tess_level_inner: self.tess_level_inner as f32,
@@ -187,20 +187,12 @@ impl TeapotQuad {
     OwnedMergedUniform::new(camera_uniforms, extra_uniforms)
   }
 
-  // discard_frag is used by shadow shader
-  pub fn load_program(
-    facade: &impl Facade,
-    discard_frag: bool,
-  ) -> Result<Program> {
+  pub fn load_program(facade: &impl Facade) -> Result<Program> {
     use std::fs::read_to_string;
     let vert = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.vert"))?;
     let tcs = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.tcs"))?;
     let tes = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.tes"))?;
-    let frag = if discard_frag {
-      String::from("#version 330 core\nvoid main() { }")
-    } else {
-      read_to_string(format!("{LOCAL_ASSETS}/tess_obj.frag"))?
-    };
+    let frag = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.frag"))?;
 
     let program = SourceCode {
       vertex_shader: &vert,
@@ -233,12 +225,33 @@ impl TeapotQuad {
     Ok(Program::new(facade, program)?)
   }
 
+  fn load_shadow_program(facade: &impl Facade) -> Result<Program> {
+    use std::fs::read_to_string;
+    let vert = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.vert"))?;
+    let tcs = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.tcs"))?;
+    let tes = read_to_string(format!("{LOCAL_ASSETS}/tess_obj.tes"))?;
+    let frag = r#"
+      #version 330 core
+      void main() {}
+    "#;
+
+    let program = SourceCode {
+      vertex_shader: &vert,
+      tessellation_control_shader: Some(&tcs),
+      tessellation_evaluation_shader: Some(&tes),
+      fragment_shader: frag,
+      geometry_shader: None,
+    };
+
+    Ok(Program::new(facade, program)?)
+  }
+
   pub fn update(&self, _dt: &Duration) {}
 
   pub fn reload_shader(&mut self, facade: &impl Facade) -> Result<()> {
-    self.program = Self::load_program(facade, false)?;
+    self.program = Self::load_program(facade)?;
     self.wireframe_program = Self::load_wireframe_program(facade)?;
-    self.shadow_program = Self::load_program(facade, true)?;
+    self.shadow_program = Self::load_shadow_program(facade)?;
     Ok(())
   }
 
