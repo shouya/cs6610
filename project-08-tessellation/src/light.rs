@@ -214,7 +214,7 @@ impl Light {
     }
   }
 
-  pub fn rotate(&mut self, dx: f32, dy: f32) {
+  pub fn rotate(&mut self, dx: f32, _dy: f32) {
     let rot = Mat3::from_rotation_z(-dx * 0.01);
     match self.variant {
       LightVariant::Directional { ref mut dir, .. } => {

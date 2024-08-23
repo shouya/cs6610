@@ -28,6 +28,14 @@ implement_vertex!(Vertex, pos, uv);
 
 const LOCAL_ASSETS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
 
+#[derive(Copy, Clone, Debug)]
+pub enum DrawMode {
+  Normal,
+  WireframeOnly,
+  NormalWithWireframe,
+  Parallax,
+}
+
 pub struct TeapotQuad {
   vbo: VertexBuffer<Vertex>,
   normal_map: Texture2d,
@@ -35,9 +43,12 @@ pub struct TeapotQuad {
   displacement_map: Texture2d,
   program: Program,
   shadow_program: Program,
+  parallax_program: Program,
   wireframe_program: Program,
   tess_level_outer: usize,
   tess_level_inner: usize,
+  displacement_scale: f32,
+  draw_mode: DrawMode,
 }
 
 impl TeapotQuad {
@@ -65,6 +76,7 @@ impl TeapotQuad {
     let program = Self::load_program(facade)?;
     let shadow_program = Self::load_shadow_program(facade)?;
     let wireframe_program = Self::load_wireframe_program(facade)?;
+    let parallax_program = Self::load_parallax_program(facade)?;
 
     let normal_map =
       load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
@@ -77,14 +89,36 @@ impl TeapotQuad {
       program,
       shadow_program,
       wireframe_program,
+      parallax_program,
       normal_map,
       displacement_map,
       tess_level_outer: 18,
       tess_level_inner: 18,
+      displacement_scale: 0.5,
+      draw_mode: DrawMode::Normal,
     })
   }
 
   pub fn draw(
+    &self,
+    target: &mut impl Surface,
+    camera: &Camera,
+    light: &Light,
+  ) -> Result<()> {
+    match self.draw_mode {
+      DrawMode::Normal => self.draw_normal(target, camera, light)?,
+      DrawMode::WireframeOnly => self.draw_wireframe(target, camera, light)?,
+      DrawMode::NormalWithWireframe => {
+        self.draw_normal(target, camera, light)?;
+        self.draw_wireframe(target, camera, light)?;
+      }
+      DrawMode::Parallax => self.draw_parallax(target, camera, light)?,
+    }
+
+    Ok(())
+  }
+
+  pub fn draw_normal(
     &self,
     target: &mut impl Surface,
     camera: &Camera,
@@ -101,9 +135,26 @@ impl TeapotQuad {
     Ok(())
   }
 
+  pub fn draw_parallax(
+    &self,
+    target: &mut impl Surface,
+    camera: &Camera,
+    light: &Light,
+  ) -> Result<()> {
+    self.draw_raw(
+      target,
+      camera,
+      &self.parallax_program,
+      light.uniforms(camera),
+      None,
+    )?;
+
+    Ok(())
+  }
+
   pub fn draw_wireframe(
     &self,
-    target: &mut glium::Frame,
+    target: &mut impl Surface,
     camera: &Camera,
     light: &Light,
   ) -> Result<()> {
@@ -178,10 +229,11 @@ impl TeapotQuad {
       .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear);
 
     let extra_uniforms = uniform! {
-      tess_level_inner: self.tess_level_inner as f32,
-      tess_level_outer: self.tess_level_outer as f32,
-      normal_map: normal_map,
-      displacement_map: displacement_map,
+       tess_level_inner: self.tess_level_inner as f32,
+       tess_level_outer: self.tess_level_outer as f32,
+       normal_map: normal_map,
+       displacement_map: displacement_map,
+       displacement_scale: self.displacement_scale,
     };
 
     OwnedMergedUniform::new(camera_uniforms, extra_uniforms)
@@ -204,6 +256,14 @@ impl TeapotQuad {
 
     let program = Program::new(facade, program)?;
     Ok(program)
+  }
+
+  fn load_parallax_program(facade: &impl Facade) -> Result<Program> {
+    use std::fs::read_to_string;
+    let vert = read_to_string(format!("{LOCAL_ASSETS}/quad_parallax.vert"))?;
+    let frag = read_to_string(format!("{LOCAL_ASSETS}/quad_parallax.frag"))?;
+
+    Ok(Program::from_source(facade, &vert, &frag, None)?)
   }
 
   fn load_wireframe_program(facade: &impl Facade) -> Result<Program> {
@@ -260,6 +320,22 @@ impl TeapotQuad {
       (self.tess_level_inner as isize + delta).max(1) as usize;
     self.tess_level_outer =
       (self.tess_level_outer as isize + delta).max(1) as usize;
+  }
+
+  pub fn update_displacement_scale(&mut self, delta: f32) {
+    self.displacement_scale = (self.displacement_scale + delta).clamp(0.0, 1.0);
+  }
+
+  pub fn cycle_draw_mode(&mut self) {
+    let new_draw_mode = match self.draw_mode {
+      DrawMode::Normal => DrawMode::WireframeOnly,
+      DrawMode::WireframeOnly => DrawMode::NormalWithWireframe,
+      DrawMode::NormalWithWireframe => DrawMode::Parallax,
+      DrawMode::Parallax => DrawMode::Normal,
+    };
+
+    println!("Draw mode: {:?}", new_draw_mode);
+    self.draw_mode = new_draw_mode;
   }
 }
 

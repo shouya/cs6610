@@ -2,7 +2,7 @@ use std::{rc::Rc, time::Duration};
 
 use glam::Mat4;
 use glium::backend::Context;
-use winit::keyboard::ModifiersState;
+use winit::keyboard::{ModifiersState, NamedKey};
 
 use crate::{
   light::ShadowMapVisual, object::LightObject, teapot_quad::TeapotQuad, Camera,
@@ -13,7 +13,6 @@ pub struct Scene {
   pub light: Light,
   pub camera: Camera,
   pub teapot_quad: Option<TeapotQuad>,
-  pub show_wireframe: bool,
   // tracking the position and orientation of the light
   pub light_obj: Object,
   // the boolean is used to toggle the shadow map visual
@@ -31,7 +30,6 @@ impl Scene {
       teapot_quad: None,
       light_obj: LightObject::load(facade)?,
       shadow_map_visual: (false, ShadowMapVisual::new(facade)?),
-      show_wireframe: false,
       context: facade.get_context().clone(),
     })
   }
@@ -63,29 +61,28 @@ impl Scene {
   }
 
   pub fn handle_key(&mut self, key: winit::event::KeyEvent) {
-    let key = key.logical_key.to_text();
+    let key = key.logical_key;
 
-    match key {
-      Some("s") => {
-        self.shadow_map_visual.0 = !self.shadow_map_visual.0;
-      }
-      Some("x") => {
-        self.light.toggle_light_variant();
-      }
-      Some("+") => {
-        if let Some(quad) = &mut self.teapot_quad {
-          quad.update_tess_level(1);
-        }
-      }
-      Some("-") => {
-        if let Some(quad) = &mut self.teapot_quad {
-          quad.update_tess_level(-1);
-        }
-      }
-      Some("w") => {
-        self.show_wireframe = !self.show_wireframe;
-      }
-      _ => {}
+    if key == "s" {
+      self.shadow_map_visual.0 = !self.shadow_map_visual.0;
+    } else if key == "x" {
+      self.light.toggle_light_variant();
+    }
+
+    let Some(quad) = &mut self.teapot_quad else {
+      return;
+    };
+
+    if key == NamedKey::ArrowLeft {
+      quad.update_tess_level(-1);
+    } else if key == NamedKey::ArrowRight {
+      quad.update_tess_level(1);
+    } else if key == NamedKey::ArrowUp {
+      quad.update_displacement_scale(0.02);
+    } else if key == NamedKey::ArrowDown {
+      quad.update_displacement_scale(-0.02);
+    } else if key == "w" {
+      quad.cycle_draw_mode();
     }
   }
 
@@ -125,9 +122,6 @@ impl Scene {
   fn draw_objects(&self, frame: &mut glium::Frame) -> Result<()> {
     if let Some(quad) = &self.teapot_quad {
       quad.draw(frame, &self.camera, &self.light)?;
-      if self.show_wireframe {
-        quad.draw_wireframe(frame, &self.camera, &self.light)?;
-      }
     }
 
     Ok(())
