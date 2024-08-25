@@ -16,9 +16,7 @@ uniform sampler2D normal_map;
 uniform sampler2D color_texture;
 
 uniform float displacement_scale;
-uniform float tess_level_inner;
-
-uniform mat3 tbn_matrix;
+uniform float detail_level;
 
 vec2 trace(vec3 view_dir, vec2 uv, float levels) {
   float curr_h = 1 - texture(displacement_map, uv).z;
@@ -60,7 +58,7 @@ vec2 trace(vec3 view_dir, vec2 uv, float levels) {
 
 void main() {
   vec3 view_dir_t = normalize(fs_in.camera_pos_t - fs_in.frag_pos_t);
-  vec2 traced_uv = trace(view_dir_t, fs_in.frag_uv, tess_level_inner);
+  vec2 traced_uv = trace(view_dir_t, fs_in.frag_uv, detail_level);
 
   if (traced_uv.x < 0 || traced_uv.x > 1 || traced_uv.y < 0 || traced_uv.y > 1) {
     discard;

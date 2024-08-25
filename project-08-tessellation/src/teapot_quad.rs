@@ -46,8 +46,7 @@ pub struct TeapotQuad {
   shadow_program: Program,
   parallax_program: Program,
   wireframe_program: Program,
-  tess_level_outer: usize,
-  tess_level_inner: usize,
+  detail_level: f32,
   displacement_scale: f32,
   draw_mode: DrawMode,
 }
@@ -102,8 +101,7 @@ impl TeapotQuad {
       normal_map,
       displacement_map,
       color_texture,
-      tess_level_outer: 18,
-      tess_level_inner: 18,
+      detail_level: 18.0,
       displacement_scale: 0.2,
       draw_mode: DrawMode::Normal,
     })
@@ -276,8 +274,7 @@ impl TeapotQuad {
       .wrap_function(SamplerWrapFunction::Clamp);
 
     let extra_uniforms = uniform! {
-       tess_level_inner: self.tess_level_inner as f32,
-       tess_level_outer: self.tess_level_outer as f32,
+       detail_level: self.detail_level,
        normal_map: normal_map,
        displacement_map: displacement_map,
        displacement_scale: self.displacement_scale,
@@ -363,11 +360,8 @@ impl TeapotQuad {
     Ok(())
   }
 
-  pub fn update_tess_level(&mut self, delta: isize) {
-    self.tess_level_inner =
-      (self.tess_level_inner as isize + delta).max(1) as usize;
-    self.tess_level_outer =
-      (self.tess_level_outer as isize + delta).max(1) as usize;
+  pub fn update_detail_level(&mut self, delta: f32) {
+    self.detail_level = (self.detail_level + delta).clamp(1.0, 100.0);
   }
 
   pub fn update_displacement_scale(&mut self, delta: f32) {
