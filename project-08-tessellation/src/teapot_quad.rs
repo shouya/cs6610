@@ -4,14 +4,14 @@ use common::{
   to_raw_image, CameraLike, Draw, DynUniforms, HasShadow, MergedUniform,
   OwnedMergedUniform,
 };
-use glam::{Mat3, Mat4};
+use glam::{Mat3, Mat4, Vec3};
 use glium::{
   backend::Facade,
   implement_vertex,
   index::{NoIndices, PrimitiveType},
   program::SourceCode,
   uniform,
-  uniforms::{UniformValue, Uniforms},
+  uniforms::{SamplerWrapFunction, UniformValue, Uniforms},
   Depth, DepthTest, DrawParameters, Program, Surface, Texture2d, VertexBuffer,
 };
 use image::RgbImage;
@@ -38,9 +38,10 @@ pub enum DrawMode {
 
 pub struct TeapotQuad {
   vbo: VertexBuffer<Vertex>,
-  normal_map: Texture2d,
   model: Transform,
+  normal_map: Texture2d,
   displacement_map: Texture2d,
+  color_texture: Option<Texture2d>,
   program: Program,
   shadow_program: Program,
   parallax_program: Program,
@@ -78,10 +79,17 @@ impl TeapotQuad {
     let wireframe_program = Self::load_wireframe_program(facade)?;
     let parallax_program = Self::load_parallax_program(facade)?;
 
-    let normal_map =
-      load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
+    // let normal_map =
+    //   load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
+    // let displacement_map =
+    //   load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
+    // let color_texture = None;
+
+    let normal_map = load_texture(facade, "/home/shou/tmp/bricks2_normal.jpg")?;
     let displacement_map =
-      load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
+      load_texture(facade, "/home/shou/tmp/bricks2_disp.jpg")?;
+    let color_texture =
+      Some(load_texture(facade, "/home/shou/tmp/bricks2.jpg")?);
 
     Ok(Self {
       model: Transform::default(),
@@ -92,6 +100,7 @@ impl TeapotQuad {
       parallax_program,
       normal_map,
       displacement_map,
+      color_texture,
       tess_level_outer: 18,
       tess_level_inner: 18,
       displacement_scale: 0.5,
@@ -141,12 +150,35 @@ impl TeapotQuad {
     camera: &Camera,
     light: &Light,
   ) -> Result<()> {
-    self.draw_raw(
-      target,
-      camera,
-      &self.parallax_program,
-      light.uniforms(camera),
-      None,
+    let program = &self.parallax_program;
+    let own_uniforms = self.uniforms(camera, program);
+    let light_uniforms = light.uniforms(camera);
+
+    // maps from model space to tangent space.  transpose == inverse
+    // for orthogonal matrices
+    let tbn_matrix = Mat3::from_cols(
+      // tangent
+      self.model.map_vec(Vec3::X * 0.5).normalize(),
+      // bitangent
+      self.model.map_vec(-Vec3::Y * 0.5).normalize(),
+      // normal
+      self.model.map_vec(Vec3::Z * 0.5).normalize(),
+    )
+    .transpose();
+
+    let extra_uniforms = uniform! {
+      tbn_matrix: tbn_matrix.to_cols_array_2d(),
+    };
+    let uniforms = MergedUniform::new(&light_uniforms, &own_uniforms);
+    let uniforms = MergedUniform::new(&uniforms, &extra_uniforms);
+    let params = default_draw_params();
+
+    target.draw(
+      &self.vbo,
+      NoIndices(PrimitiveType::TriangleStrip),
+      program,
+      &uniforms,
+      &params,
     )?;
 
     Ok(())
@@ -221,18 +253,27 @@ impl TeapotQuad {
       .normal_map
       .sampled()
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear);
+      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+      .wrap_function(SamplerWrapFunction::Clamp);
     let displacement_map = self
       .displacement_map
       .sampled()
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear);
+      .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+      .wrap_function(SamplerWrapFunction::Clamp);
+    let color_texture = self.color_texture.as_ref().map(|t| {
+      t.sampled()
+        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+        .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+        .wrap_function(SamplerWrapFunction::Clamp)
+    });
 
     let extra_uniforms = uniform! {
        tess_level_inner: self.tess_level_inner as f32,
        tess_level_outer: self.tess_level_outer as f32,
        normal_map: normal_map,
        displacement_map: displacement_map,
+       color_texture: color_texture.unwrap(),
        displacement_scale: self.displacement_scale,
     };
 
@@ -312,6 +353,7 @@ impl TeapotQuad {
     self.program = Self::load_program(facade)?;
     self.wireframe_program = Self::load_wireframe_program(facade)?;
     self.shadow_program = Self::load_shadow_program(facade)?;
+    self.parallax_program = Self::load_parallax_program(facade)?;
     Ok(())
   }
 
