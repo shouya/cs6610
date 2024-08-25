@@ -1,0 +1,40 @@
+My implementation for the 8th project. This project renders a flat plane and creates the illusion of a teapot using a displacement map and a normal map.
+
+https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=8
+
+All CS6610 and optional requirements are implemented. In addition, I also implemented the following extra features:
+
+- parallax occulusion mapping
+  + Note: shadow map for parallax mapping mode is not implemented.
+  + Note: an optional color texture.
+- on-the-fly detail level adjustment
+- on-the-fly displacement scale adjustment
+- cycle among draw modes
+  + tessellation
+  + wireframe
+  + tessellation with wireframe overlay
+  + parallax
+- features from previous projects
+  + shadow map visualization
+  + toggleable axis
+  + toggleable perspective/orthographic camera
+  + toggleable directional/spot light
+
+Controls:
+
+left drag: rotate camera
+right drag/wheel: change camera distance
+
+shift+left drag: rotate light position/direction
+
+w: cycle between draw modes (tessellation, wireframe, parallax)
+left and right: adjust detail level (tessellation level or steep parallax mapping layers)
+up and down: adjust displacement scale
+
+x: toggle between directional light and spot light
+s: toggle shadow map visualization
+p: toggle between perspective and orthographic projection
+a: toggle axis
+
+f6/r: reload shaders
+esc: quit

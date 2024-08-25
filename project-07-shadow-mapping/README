@@ -2,7 +2,7 @@ My implementation for the 7th project. This project renders a teapot on a plane 
 
 https://graphics.cs.utah.edu/courses/cs6610/spring2021/?prj=7
 
-All CS6610 and optional requirements implemented. In addition, I also implemented the following extra features/optimization:
+All CS6610 and optional requirements are implemented. In addition, I also implemented the following extra features/optimization:
 
 - visualize shadow map for debugging
 - toggle between spot light and directional light
