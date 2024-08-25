@@ -74,13 +74,13 @@ impl Scene {
     };
 
     if key == NamedKey::ArrowLeft {
-      quad.update_detail_level(-1.0);
+      quad.adjust_detail_level(-1.0);
     } else if key == NamedKey::ArrowRight {
-      quad.update_detail_level(1.0);
+      quad.adjust_detail_level(1.0);
     } else if key == NamedKey::ArrowUp {
-      quad.update_displacement_scale(0.01);
+      quad.adjust_displacement_scale(0.01);
     } else if key == NamedKey::ArrowDown {
-      quad.update_displacement_scale(-0.01);
+      quad.adjust_displacement_scale(-0.01);
     } else if key == "w" {
       quad.cycle_draw_mode();
     }

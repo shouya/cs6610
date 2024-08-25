@@ -30,9 +30,9 @@ const LOCAL_ASSETS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
 
 #[derive(Copy, Clone, Debug)]
 pub enum DrawMode {
-  Normal,
-  WireframeOnly,
-  NormalWithWireframe,
+  Tessellation,
+  TessellationWireframe,
+  TessellationWithWireframe,
   Parallax,
 }
 
@@ -103,7 +103,7 @@ impl TeapotQuad {
       color_texture,
       detail_level: 18.0,
       displacement_scale: 0.2,
-      draw_mode: DrawMode::Normal,
+      draw_mode: DrawMode::Tessellation,
     })
   }
 
@@ -114,9 +114,11 @@ impl TeapotQuad {
     light: &Light,
   ) -> Result<()> {
     match self.draw_mode {
-      DrawMode::Normal => self.draw_normal(target, camera, light)?,
-      DrawMode::WireframeOnly => self.draw_wireframe(target, camera, light)?,
-      DrawMode::NormalWithWireframe => {
+      DrawMode::Tessellation => self.draw_normal(target, camera, light)?,
+      DrawMode::TessellationWireframe => {
+        self.draw_wireframe(target, camera, light)?
+      }
+      DrawMode::TessellationWithWireframe => {
         self.draw_normal(target, camera, light)?;
         self.draw_wireframe(target, camera, light)?;
       }
@@ -360,20 +362,20 @@ impl TeapotQuad {
     Ok(())
   }
 
-  pub fn update_detail_level(&mut self, delta: f32) {
+  pub fn adjust_detail_level(&mut self, delta: f32) {
     self.detail_level = (self.detail_level + delta).clamp(1.0, 100.0);
   }
 
-  pub fn update_displacement_scale(&mut self, delta: f32) {
+  pub fn adjust_displacement_scale(&mut self, delta: f32) {
     self.displacement_scale = (self.displacement_scale + delta).clamp(0.0, 1.0);
   }
 
   pub fn cycle_draw_mode(&mut self) {
     let new_draw_mode = match self.draw_mode {
-      DrawMode::Normal => DrawMode::WireframeOnly,
-      DrawMode::WireframeOnly => DrawMode::NormalWithWireframe,
-      DrawMode::NormalWithWireframe => DrawMode::Parallax,
-      DrawMode::Parallax => DrawMode::Normal,
+      DrawMode::Tessellation => DrawMode::TessellationWireframe,
+      DrawMode::TessellationWireframe => DrawMode::TessellationWithWireframe,
+      DrawMode::TessellationWithWireframe => DrawMode::Parallax,
+      DrawMode::Parallax => DrawMode::Tessellation,
     };
 
     println!("Draw mode: {:?}", new_draw_mode);

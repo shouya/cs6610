@@ -13,10 +13,11 @@ in VS_OUT {
 
 uniform sampler2D displacement_map;
 uniform sampler2D normal_map;
-uniform sampler2D color_texture;
+// uniform sampler2D color_texture;
 
 uniform float displacement_scale;
 uniform float detail_level;
+uniform mat3 tbn_matrix;
 
 vec2 trace(vec3 view_dir, vec2 uv, float levels) {
   float curr_h = 1 - texture(displacement_map, uv).z;
@@ -69,9 +70,14 @@ void main() {
   vec3 normal = normalize(texture(normal_map, traced_uv).xyz * 2 - 1);
 
   float geom = clamp(dot(light_dir_m, normal), 0.0, 1.0);
-  vec3 color_diffuse = texture(color_texture, traced_uv).xyz * geom;
+  vec3 color_diffuse = vec3(1, 1, 1) * geom;
+
+  vec3 view_dir_m = tbn_matrix * view_dir_t;
+  vec3 reflect_dir_m = reflect(-light_dir_m, normal);
+  float spec = pow(clamp(dot(reflect_dir_m, view_dir_m), 0.0, 1.0), 68);
+  vec3 color_specular = vec3(1, 1, 1) * spec;
 
   vec3 color_ambient = vec3(0.1, 0.1, 0.1);
 
-  color = vec4(color_diffuse + color_ambient, 1);
+  color = vec4(color_diffuse + color_specular + color_ambient, 1);
 }
