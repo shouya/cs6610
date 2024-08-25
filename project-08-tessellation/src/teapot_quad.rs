@@ -79,17 +79,18 @@ impl TeapotQuad {
     let wireframe_program = Self::load_wireframe_program(facade)?;
     let parallax_program = Self::load_parallax_program(facade)?;
 
-    // let normal_map =
-    //   load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
-    // let displacement_map =
-    //   load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
-    // let color_texture = None;
-
-    let normal_map = load_texture(facade, "/home/shou/tmp/bricks2_normal.jpg")?;
+    let normal_map =
+      load_texture(facade, format!("{LOCAL_ASSETS}/teapot_normal.png"))?;
     let displacement_map =
-      load_texture(facade, "/home/shou/tmp/bricks2_disp.jpg")?;
-    let color_texture =
-      Some(load_texture(facade, "/home/shou/tmp/bricks2.jpg")?);
+      load_texture(facade, format!("{LOCAL_ASSETS}/teapot_disp.png"))?;
+    let color_texture = None;
+
+    // download assets from https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+    // let normal_map = load_texture(facade, "{LOCAL_ASSETS}/bricks2_normal.jpg")?;
+    // let displacement_map =
+    //   load_texture(facade, "{LOCAL_ASSETS}/bricks2_disp.jpg")?;
+    // let color_texture =
+    //   Some(load_texture(facade, "{LOCAL_ASSETS}/bricks2.jpg")?);
 
     Ok(Self {
       model: Transform::default(),
@@ -103,7 +104,7 @@ impl TeapotQuad {
       color_texture,
       tess_level_outer: 18,
       tess_level_inner: 18,
-      displacement_scale: 0.5,
+      displacement_scale: 0.2,
       draw_mode: DrawMode::Normal,
     })
   }
@@ -222,31 +223,43 @@ impl TeapotQuad {
       glium::uniforms::UniformValue::Mat3(mat3.to_cols_array_2d())
     }
 
-    let mut camera_uniforms = DynUniforms::new();
+    let mut dynamic_uniforms = DynUniforms::new();
     let model = self.model.to_mat4();
     let view = Mat4::from_cols_array_2d(&camera.view());
     let proj = Mat4::from_cols_array_2d(&camera.projection());
 
-    camera_uniforms.add_raw("model", mat4_uniform(&model));
-    camera_uniforms.add_raw("view", mat4_uniform(&view));
-    camera_uniforms.add_raw("projection", mat4_uniform(&proj));
+    dynamic_uniforms.add_raw("model", mat4_uniform(&model));
+    dynamic_uniforms.add_raw("view", mat4_uniform(&view));
+    dynamic_uniforms.add_raw("projection", mat4_uniform(&proj));
 
     if program.get_uniform("view_projection").is_some() {
       let view_proj = proj * view;
-      camera_uniforms.add_raw("view_projection", mat4_uniform(&view_proj));
+      dynamic_uniforms.add_raw("view_projection", mat4_uniform(&view_proj));
     }
 
     if program.get_uniform("model_view_projection").is_some() {
       let model_view_proj = proj * view * model;
-      camera_uniforms
+      dynamic_uniforms
         .add_raw("model_view_projection", mat4_uniform(&model_view_proj));
     }
 
     if program.get_uniform("model_view_normal").is_some() {
       let model_view = view * model;
       let model_view_normal = Mat3::from_mat4(model_view).inverse().transpose();
-      camera_uniforms
+      dynamic_uniforms
         .add_raw("model_view_normal", mat3_uniform(&model_view_normal));
+    }
+
+    if let Some(color_texture) = self.color_texture.as_ref() {
+      let sampler = color_texture
+        .sampled()
+        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
+        .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
+        .wrap_function(SamplerWrapFunction::Clamp);
+      dynamic_uniforms.add_raw(
+        "color_texture",
+        glium::uniforms::UniformValue::Texture2d(sampler.0, Some(sampler.1)),
+      );
     }
 
     let normal_map = self
@@ -261,23 +274,16 @@ impl TeapotQuad {
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
       .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
       .wrap_function(SamplerWrapFunction::Clamp);
-    let color_texture = self.color_texture.as_ref().map(|t| {
-      t.sampled()
-        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Linear)
-        .minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapLinear)
-        .wrap_function(SamplerWrapFunction::Clamp)
-    });
 
     let extra_uniforms = uniform! {
        tess_level_inner: self.tess_level_inner as f32,
        tess_level_outer: self.tess_level_outer as f32,
        normal_map: normal_map,
        displacement_map: displacement_map,
-       color_texture: color_texture.unwrap(),
        displacement_scale: self.displacement_scale,
     };
 
-    OwnedMergedUniform::new(camera_uniforms, extra_uniforms)
+    OwnedMergedUniform::new(dynamic_uniforms, extra_uniforms)
   }
 
   pub fn load_program(facade: &impl Facade) -> Result<Program> {

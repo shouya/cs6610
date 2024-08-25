@@ -78,9 +78,9 @@ impl Scene {
     } else if key == NamedKey::ArrowRight {
       quad.update_tess_level(1);
     } else if key == NamedKey::ArrowUp {
-      quad.update_displacement_scale(0.02);
+      quad.update_displacement_scale(0.01);
     } else if key == NamedKey::ArrowDown {
-      quad.update_displacement_scale(-0.02);
+      quad.update_displacement_scale(-0.01);
     } else if key == "w" {
       quad.cycle_draw_mode();
     }

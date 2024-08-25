@@ -42,6 +42,8 @@ uniform int light_type;
 uniform sampler2D displacement_map;
 uniform sampler2D normal_map;
 
+uniform float displacement_scale;
+
 void main(void) {
   uv = gl_TessCoord.xy;
   uv.y = 1-uv.y;
@@ -53,7 +55,7 @@ void main(void) {
 
   float disp = texture(displacement_map, uv).x;
   vec3 pos_m_offset = pos_m;
-  pos_m_offset.z += disp * 0.2;
+  pos_m_offset.z += disp * displacement_scale;
 
   pos_w = (model * vec4(pos_m_offset, 1)).xyz;
   pos_v = (view * vec4(pos_m_offset, 1)).xyz;
