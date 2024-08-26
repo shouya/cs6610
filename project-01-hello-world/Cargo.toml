@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 glium = { workspace = true }
 winit = { workspace = true }
+common = { path = "../common" }

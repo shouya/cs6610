@@ -19,9 +19,8 @@ members = [
 [workspace.dependencies]
 cgmath = "0.18.0"
 glium = { git = "https://github.com/shouya/glium", branch = "border-color-for-sampler" }
-raw-window-handle = "0.5"
-winit = "0.29.15"
 image = "0.25.2"
+winit = "0.30.5"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 genmesh = "0.6.2"
 glam = "0.28.0"

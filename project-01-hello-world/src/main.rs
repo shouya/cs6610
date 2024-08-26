@@ -1,122 +1,129 @@
-use glium::{
-  backend::glutin::SimpleWindowBuilder, glutin::surface::WindowSurface,
-  Display, Surface,
-};
+use std::time::Duration;
+
+use common::gl_boilerplate::init_display;
+use glium::{glutin::surface::WindowSurface, Display, Surface as _};
 use winit::{
-  dpi::PhysicalSize,
-  event::{DeviceId, Event, KeyEvent, WindowEvent},
-  event_loop::{EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
+  application::ApplicationHandler,
+  event::{StartCause, WindowEvent},
+  event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
   keyboard::NamedKey,
-  window::{Window, WindowId},
+  window::{Window, WindowAttributes, WindowId},
 };
 
-#[derive(Debug)]
-enum UserSignal {
-  Quit,
-}
+const TARGET_UPS: u32 = 60;
+const TARGET_FRAME_TIME: Duration =
+  Duration::from_micros(1_000_000 / TARGET_UPS as u64);
 
 struct App {
-  #[allow(unused)]
-  window: Window,
+  window: Option<Window>,
   color: [f32; 4],
   boot_time: std::time::Instant,
-  display: Display<WindowSurface>,
-  event_loop: EventLoopProxy<UserSignal>,
+  last_update: std::time::Instant,
+  display: Option<Display<WindowSurface>>,
 }
 
 impl App {
-  fn handle_widow_event(
+  fn new() -> Self {
+    Self {
+      window: None,
+      color: [0.0, 0.0, 0.0, 1.0],
+      boot_time: std::time::Instant::now(),
+      last_update: std::time::Instant::now(),
+      display: None,
+    }
+  }
+}
+
+impl ApplicationHandler for App {
+  fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    if self.window.is_none() {
+      let window_attrs = WindowAttributes::default().with_title("Hello world!");
+
+      match event_loop.create_window(window_attrs) {
+        Ok(window) => {
+          let display = init_display(&window);
+          self.window = Some(window);
+          self.display = Some(display);
+        }
+        Err(e) => {
+          eprintln!("Failed to create window: {}", e);
+          event_loop.exit();
+        }
+      }
+    }
+  }
+
+  fn window_event(
     &mut self,
+    event_loop: &ActiveEventLoop,
     _window_id: WindowId,
     event: WindowEvent,
-    window_target: &EventLoopWindowTarget<UserSignal>,
   ) {
+    let wake_up_at = self.last_update + TARGET_FRAME_TIME;
+    event_loop.set_control_flow(ControlFlow::WaitUntil(wake_up_at));
+
     match event {
-      WindowEvent::Resized(size) => self.handle_resize(size),
-      WindowEvent::KeyboardInput {
-        device_id,
-        event,
-        is_synthetic,
-      } => self.handle_keyboard(device_id, event, is_synthetic),
-      WindowEvent::RedrawRequested => self.handle_redraw(),
       WindowEvent::CloseRequested => {
-        window_target.exit();
+        event_loop.exit();
+      }
+      WindowEvent::Resized(size) => {
+        println!("Resized: {:?}", size);
+      }
+      WindowEvent::KeyboardInput { event, .. } => {
+        if event.logical_key == NamedKey::Escape {
+          event_loop.exit();
+        }
+      }
+      WindowEvent::RedrawRequested => {
+        self.handle_redraw();
+        // self.handle_idle();
       }
       _ => {}
     }
   }
 
-  fn handle_resize(&mut self, size: PhysicalSize<u32>) {
-    println!("Resized to {:?}", size);
-  }
-
-  fn handle_keyboard(
-    &mut self,
-    _device_id: DeviceId,
-    event: KeyEvent,
-    _is_synthetic: bool,
-  ) {
-    if event.logical_key == NamedKey::Escape {
-      self.event_loop.send_event(UserSignal::Quit).unwrap();
+  fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: StartCause) {
+    if self.last_update.elapsed() > TARGET_FRAME_TIME {
+      self.update();
     }
   }
+}
 
+impl App {
   fn handle_redraw(&mut self) {
-    let mut frame = self.display.draw();
-    frame.clear_color_and_depth(self.color.into(), 0.0);
-    frame.finish().unwrap();
-  }
-
-  fn handle_user_event(
-    &mut self,
-    user_event: UserSignal,
-    window_target: &EventLoopWindowTarget<UserSignal>,
-  ) {
-    match user_event {
-      UserSignal::Quit => window_target.exit(),
+    if let Some(display) = &self.display {
+      let mut frame = display.draw();
+      frame.clear_color_and_depth(self.color.into(), 0.0);
+      frame.finish().unwrap();
     }
   }
 
-  fn handle_idle(&mut self) {
+  fn update(&mut self) {
+    let update_dt = self.last_update.elapsed();
+    self.last_update = std::time::Instant::now();
+
     let elapsed = self.boot_time.elapsed().as_millis();
     let t = elapsed as f32 / 2000.0;
     let r = t.sin().abs();
     let g = (t * 2.0).sin().abs();
     let b = (t * 3.0).sin().abs();
     self.color = [r, g, b, 1.0];
-    self.window.set_title(&format!("Elapsed: {}ms", elapsed));
-    self.window.request_redraw();
+
+    if let Some(window) = &self.window {
+      window.set_title(&format!(
+        "Update time: {:.02}ms",
+        update_dt.as_secs_f32() * 1000.0
+      ));
+      window.request_redraw();
+    }
   }
 }
 
 fn main() {
-  let event_loop = EventLoopBuilder::with_user_event()
-    .build()
-    .expect("Failed to create event loop");
-  let (window, display) = SimpleWindowBuilder::new()
-    .with_title("Hello world!")
-    .build(&event_loop);
-  let event_loop_proxy = event_loop.create_proxy();
-  let mut app = App {
-    window,
-    display,
-    event_loop: event_loop_proxy,
-    boot_time: std::time::Instant::now(),
-    color: [0.0, 0.0, 0.0, 1.0],
-  };
+  let event_loop = EventLoop::new().unwrap();
+  event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
 
-  event_loop
-    .run(move |event, window_target| match event {
-      Event::WindowEvent { window_id, event } => {
-        app.handle_widow_event(window_id, event, window_target);
-      }
-      Event::UserEvent(user_event) => {
-        app.handle_user_event(user_event, window_target);
-      }
-      Event::AboutToWait => {
-        app.handle_idle();
-      }
-      _ => {}
-    })
-    .unwrap();
+  let mut app = App::new();
+  app.update();
+  event_loop.run_app(&mut app).expect("Failed to run app");
 }
