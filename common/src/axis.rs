@@ -1,13 +1,22 @@
-use std::mem::size_of;
-
-use cgmath::{Deg, Euler, Matrix4};
+use glam::Mat4;
 use glium::{
-  backend::Facade, program::SourceCode, uniform, DrawParameters, Frame,
-  Program, Surface as _, VertexBuffer,
+  backend::Facade, implement_vertex, index::PrimitiveType, program::SourceCode,
+  uniform, DrawParameters, Frame, IndexBuffer, Program, Surface as _,
+  VertexBuffer,
 };
 
+#[derive(Copy, Clone)]
+struct AxisVert {
+  pos: [f32; 3],
+  clr: [f32; 3],
+}
+
+implement_vertex!(AxisVert, pos, clr);
+
 pub struct Axis {
-  model_vbo: VertexBuffer<[f32; 3]>,
+  vbo: VertexBuffer<AxisVert>,
+  lines_ibo: IndexBuffer<u8>,
+  points_ibo: IndexBuffer<u8>,
   program: Program,
 }
 
@@ -15,11 +24,16 @@ const VERT_SHADER: &str = r#"
 #version 330 core
 
 layout(location = 0) in vec3 pos;
+layout(location = 1) in vec3 clr;
+
+out vec3 frag_color;
+
 uniform mat4 mvp;
 
 void main()
 {
     gl_Position = mvp * vec4(pos, 1.0);
+    frag_color = clr;
 }
 "#;
 
@@ -27,26 +41,12 @@ const FRAG_SHADER: &str = r#"
 #version 330 core
 
 layout(location = 0) out vec4 color;
-uniform vec3 clr;
+in vec3 frag_color;
 
 void main() {
-  color = vec4(clr, 1.0);
+  color = vec4(frag_color, 1.0);
 }
 "#;
-
-#[allow(non_upper_case_globals)]
-const VF_F32x3: glium::vertex::VertexFormat = &[(
-  // attribute name
-  std::borrow::Cow::Borrowed("pos"),
-  // byte offset
-  0,
-  // this field was undocumented, maybe stride?
-  0,
-  // attribute type (F32F32F32)
-  glium::vertex::AttributeType::F32F32F32,
-  // does it need to be normalized?
-  false,
-)];
 
 pub type Error = anyhow::Error;
 pub type Result<T> = anyhow::Result<T>;
@@ -61,32 +61,53 @@ impl Axis {
       geometry_shader: None,
     };
     let program = Program::new(context, source_code)?;
-    let verts = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
-    let model_vbo = unsafe {
-      VertexBuffer::new_raw(context, &verts, VF_F32x3, size_of::<[f32; 3]>())?
-    };
+    let vert = |x, y, z, r, g, b, dim| {
+      let factor = if dim == 1 { 0.5 } else { 1.0 };
 
-    Ok(Self { model_vbo, program })
+      AxisVert {
+        pos: [x as f32, y as f32, z as f32],
+        clr: [r as f32 * factor, g as f32 * factor, b as f32 * factor],
+      }
+    };
+    let verts = [
+      // x axis
+      vert(0, 0, 0, 1, 0, 0, 0),
+      vert(1, 0, 0, 1, 0, 0, 0),
+      vert(0, 0, 0, 1, 0, 0, 1),
+      vert(-1, 0, 0, 1, 0, 0, 1),
+      // y axis
+      vert(0, 0, 0, 0, 1, 0, 0),
+      vert(0, 1, 0, 0, 1, 0, 0),
+      vert(0, 0, 0, 0, 1, 0, 1),
+      vert(0, -1, 0, 0, 1, 0, 1),
+      // z axis
+      vert(0, 0, 0, 0, 0, 1, 0),
+      vert(0, 0, 1, 0, 0, 1, 0),
+      vert(0, 0, 0, 0, 0, 1, 1),
+      vert(0, 0, -1, 0, 0, 1, 1),
+    ];
+    let lines_indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    let points_indices = [1, 3, 5, 7, 9, 11];
+
+    let vbo = VertexBuffer::new(context, &verts)?;
+    let lines_ibo =
+      IndexBuffer::new(context, PrimitiveType::LinesList, &lines_indices)?;
+    let points_ibo =
+      IndexBuffer::new(context, PrimitiveType::Points, &points_indices)?;
+
+    Ok(Self {
+      vbo,
+      lines_ibo,
+      points_ibo,
+      program,
+    })
   }
 
-  pub fn draw_single(
-    &self,
-    frame: &mut Frame,
-    vp: &Matrix4<f32>,
-    rot: [f32; 3],
-    scale: f32,
-    color: [f32; 3],
-  ) -> Result<()> {
-    let m = Matrix4::from_scale(scale)
-      * Matrix4::from(Euler {
-        x: Deg(rot[0]),
-        y: Deg(rot[1]),
-        z: Deg(rot[2]),
-      });
-    let mvp: [[f32; 4]; 4] = (vp * m).into();
+  pub fn draw(&self, frame: &mut Frame, view_projection: &Mat4) -> Result<()> {
+    let mvp: [[f32; 4]; 4] = view_projection.to_cols_array_2d();
+
     let uniforms = uniform! {
       mvp: mvp,
-      clr: color,
     };
 
     let draw_params = DrawParameters {
@@ -96,31 +117,21 @@ impl Axis {
     };
 
     frame.draw(
-      &self.model_vbo,
-      glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
+      &self.vbo,
+      &self.lines_ibo,
       &self.program,
       &uniforms,
       &draw_params,
     )?;
 
     frame.draw(
-      &self.model_vbo,
-      glium::index::NoIndices(glium::index::PrimitiveType::Points),
+      &self.vbo,
+      &self.points_ibo,
       &self.program,
       &uniforms,
       &draw_params,
     )?;
 
-    Ok(())
-  }
-
-  pub fn draw(&self, frame: &mut Frame, camera: &Matrix4<f32>) -> Result<()> {
-    self.draw_single(frame, camera, [0.0, 0.0, 0.0], 1.0, [1.0, 0.0, 0.0])?;
-    self.draw_single(frame, camera, [0.0, 0.0, 0.0], -1.0, [0.8, 0.0, 0.0])?;
-    self.draw_single(frame, camera, [0.0, 0.0, 90.0], 1.0, [0.0, 1.0, 0.0])?;
-    self.draw_single(frame, camera, [0.0, 0.0, 90.0], -1.0, [0.0, 0.8, 0.0])?;
-    self.draw_single(frame, camera, [0.0, 90.0, 0.0], 1.0, [0.0, 0.0, 1.0])?;
-    self.draw_single(frame, camera, [0.0, 90.0, 0.0], -1.0, [0.0, 0.0, 0.8])?;
     Ok(())
   }
 }

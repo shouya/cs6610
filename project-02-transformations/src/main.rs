@@ -1,10 +1,12 @@
 use std::{mem::size_of, path::Path, time::Duration};
 
+use glam::{EulerRot, Mat3, Mat4, Vec3};
 use glium::{
   backend::Facade, glutin::surface::WindowSurface, program::SourceCode,
   uniform, Display, DrawParameters, Frame, Program, Surface, VertexBuffer,
 };
 
+use common::{gl_boilerplate::init_display, Axis, SimpleObj};
 use winit::{
   application::ApplicationHandler,
   dpi::{LogicalSize, PhysicalPosition, PhysicalSize},
@@ -13,10 +15,6 @@ use winit::{
   keyboard::NamedKey,
   window::{Window, WindowAttributes, WindowId},
 };
-
-use cgmath::{Deg, Euler, Matrix3, Matrix4, Point3, SquareMatrix, Vector3};
-
-use common::{gl_boilerplate::init_display, SimpleObj};
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -36,9 +34,9 @@ struct World {
   camera_rotation: [f32; 2],
   perspective: bool,
   // world space to camera space
-  m_view: Matrix4<f32>,
+  m_view: Mat4,
   // view space to clip space
-  m_proj: Matrix4<f32>,
+  m_proj: Mat4,
   axis: Option<Axis>,
   show_axis: bool,
   teapot: Option<Teapot>,
@@ -49,14 +47,8 @@ struct Teapot {
   rotation_speed: f32,
   model_vbo: VertexBuffer<[f32; 3]>,
   program: Program,
-  center: Vector3<f32>,
-  mvp: Matrix4<f32>,
-}
-
-struct Axis {
-  model_vbo: VertexBuffer<[f32; 3]>,
-  program: Program,
-  mvp: Matrix4<f32>,
+  center: Vec3,
+  mvp: Mat4,
 }
 
 impl World {
@@ -68,8 +60,8 @@ impl World {
       camera_rotation: [0.0, 0.0],
       perspective: true,
       clear_color: [0.0, 0.0, 0.0, 1.0],
-      m_view: Matrix4::identity(),
-      m_proj: Matrix4::identity(),
+      m_view: Mat4::IDENTITY,
+      m_proj: Mat4::IDENTITY,
       axis: None,
       show_axis: true,
       teapot: None,
@@ -86,15 +78,16 @@ impl World {
 
   fn update_view(&mut self) {
     // default view matrix: eye at (0, 0, 2), looking at (0, 0, -1), up (0, 1, 0)
-    let dir = Matrix3::from_angle_y(Deg(self.camera_rotation[0]))
-      * Matrix3::from_angle_x(-Deg(self.camera_rotation[1]))
-      * Vector3::new(0.0, 0.0, -1.0);
-    let eye = Point3::new(0.0, 0.0, 0.0) + -dir * self.camera_distance;
-    let up = Vector3::new(0.0, 1.0, 0.0);
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    self.m_view = Matrix4::look_at_rh(eye, origin, up);
-
-    self.update_axis();
+    let dir = Mat3::from_euler(
+      EulerRot::YXZ,
+      self.camera_rotation[0].to_radians(),
+      self.camera_rotation[1].to_radians(),
+      0.0,
+    ) * Vec3::new(0.0, 0.0, -1.0);
+    let eye = Vec3::new(0.0, 0.0, 0.0) + -dir * self.camera_distance;
+    let up = Vec3::new(0.0, 1.0, 0.0);
+    let origin = Vec3::new(0.0, 0.0, 0.0);
+    self.m_view = Mat4::look_at_rh(eye, origin, up);
   }
 
   fn update(&mut self, dt: Duration) {
@@ -105,20 +98,22 @@ impl World {
   fn update_projection(&mut self) {
     // fov, aspect ratio, near, far
     self.m_proj = if self.perspective {
-      cgmath::perspective(cgmath::Deg(60.0), self.aspect_ratio, 0.1, 100.0)
+      Mat4::perspective_rh_gl(
+        60.0_f32.to_radians(),
+        self.aspect_ratio,
+        0.1,
+        100.0,
+      )
     } else {
-      cgmath::Matrix4::from_scale(1.0 / self.camera_distance)
-        * cgmath::ortho(
-          -1.0,
-          1.0,
-          -1.0 / self.aspect_ratio,
-          1.0 / self.aspect_ratio,
-          0.1,
-          100.0,
-        )
+      Mat4::orthographic_rh_gl(
+        -1.0,
+        1.0,
+        -1.0 / self.aspect_ratio,
+        1.0 / self.aspect_ratio,
+        0.1,
+        100.0,
+      ) * (1.0 / self.camera_distance)
     };
-
-    self.update_axis();
   }
 
   fn render(&self, context: &Display<WindowSurface>) -> Result<()> {
@@ -133,7 +128,8 @@ impl World {
 
     if let Some(axis) = self.axis.as_ref() {
       if self.show_axis {
-        if let Err(e) = axis.draw(&mut frame) {
+        let m_view_proj = self.m_proj * self.m_view;
+        if let Err(e) = axis.draw(&mut frame, &m_view_proj) {
           eprintln!("Failed to draw axis: {}", e);
         }
       }
@@ -159,18 +155,17 @@ impl World {
     };
 
     teapot.rotation += dt.as_secs_f32() * teapot.rotation_speed;
-    let m_model = Matrix4::from_scale(0.05)
-      * Matrix4::from_angle_y(cgmath::Rad(teapot.rotation))
-    // the object itself is rotated 90 to the front, let's rotate it back a little.
-      * Matrix4::from_angle_x(cgmath::Deg(-90.0))
-      * Matrix4::from_translation(-teapot.center);
-    teapot.mvp = self.m_proj * self.m_view * m_model;
-  }
 
-  fn update_axis(&mut self) {
-    if let Some(axis) = self.axis.as_mut() {
-      axis.mvp = self.m_proj * self.m_view;
-    }
+    let m_model = Mat4::from_scale(Vec3::splat(0.05))
+    // the object itself is rotated 90 to the front, let's rotate it back a little.
+      * Mat4::from_euler(
+        EulerRot::YXZ,
+        teapot.rotation,
+        (-90f32).to_radians(),
+        0.0,
+      )
+      * Mat4::from_translation(-teapot.center);
+    teapot.mvp = self.m_proj * self.m_view * m_model;
   }
 }
 
@@ -223,8 +218,8 @@ impl Teapot {
     let model_vbo = unsafe {
       VertexBuffer::new_raw(context, &model.v, VF_F32x3, size_of::<[f32; 3]>())?
     };
-    let mvp = Matrix4::<f32>::identity();
-    let center = Vector3::from(model.center());
+    let mvp = Mat4::IDENTITY;
+    let center = Vec3::from(model.center());
 
     Ok(Self {
       rotation: 0.0,
@@ -237,7 +232,7 @@ impl Teapot {
   }
 
   fn draw(&self, frame: &mut Frame) -> Result<()> {
-    let mvp: [[f32; 4]; 4] = self.mvp.into();
+    let mvp: [[f32; 4]; 4] = self.mvp.to_cols_array_2d();
     let uniforms = uniform! {
       mvp: mvp,
       clr: [1.0, 0.0, 1.0f32],
@@ -256,91 +251,6 @@ impl Teapot {
       &draw_params,
     )?;
 
-    Ok(())
-  }
-}
-
-impl Axis {
-  fn load_file<F: Facade>(context: &F, shaders_path: &Path) -> Result<Self> {
-    let vert_shader_path = shaders_path.with_extension("vert");
-    let frag_shader_path = shaders_path.with_extension("frag");
-
-    let source_code = SourceCode {
-      vertex_shader: &std::fs::read_to_string(vert_shader_path)?,
-      fragment_shader: &std::fs::read_to_string(frag_shader_path)?,
-      tessellation_control_shader: None,
-      tessellation_evaluation_shader: None,
-      geometry_shader: None,
-    };
-    let program = Program::new(context, source_code)?;
-    Self::new(context, program)
-  }
-
-  fn new<F: Facade>(context: &F, program: Program) -> Result<Self> {
-    let verts = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
-    let model_vbo = unsafe {
-      VertexBuffer::new_raw(context, &verts, VF_F32x3, size_of::<[f32; 3]>())?
-    };
-    let mvp = Matrix4::<f32>::identity();
-
-    Ok(Self {
-      model_vbo,
-      mvp,
-      program,
-    })
-  }
-
-  fn draw_single(
-    &self,
-    frame: &mut Frame,
-    rot: [f32; 3],
-    scale: f32,
-    color: [f32; 3],
-  ) -> Result<()> {
-    let trans = Matrix4::from_scale(scale)
-      * Matrix4::from(Euler {
-        x: Deg(rot[0]),
-        y: Deg(rot[1]),
-        z: Deg(rot[2]),
-      });
-    let mvp: [[f32; 4]; 4] = (self.mvp * trans).into();
-    let uniforms = uniform! {
-      mvp: mvp,
-      clr: color,
-    };
-
-    let draw_params = DrawParameters {
-      point_size: Some(10.0),
-      line_width: Some(3.0),
-      ..Default::default()
-    };
-
-    frame.draw(
-      &self.model_vbo,
-      glium::index::NoIndices(glium::index::PrimitiveType::LineStrip),
-      &self.program,
-      &uniforms,
-      &draw_params,
-    )?;
-
-    frame.draw(
-      &self.model_vbo,
-      glium::index::NoIndices(glium::index::PrimitiveType::Points),
-      &self.program,
-      &uniforms,
-      &draw_params,
-    )?;
-
-    Ok(())
-  }
-
-  fn draw(&self, frame: &mut Frame) -> Result<()> {
-    self.draw_single(frame, [0.0, 0.0, 0.0], 1.0, [1.0, 0.0, 0.0])?;
-    self.draw_single(frame, [0.0, 0.0, 0.0], -1.0, [0.8, 0.0, 0.0])?;
-    self.draw_single(frame, [0.0, 0.0, 90.0], 1.0, [0.0, 1.0, 0.0])?;
-    self.draw_single(frame, [0.0, 0.0, 90.0], -1.0, [0.0, 0.8, 0.0])?;
-    self.draw_single(frame, [0.0, 90.0, 0.0], 1.0, [0.0, 0.0, 1.0])?;
-    self.draw_single(frame, [0.0, 90.0, 0.0], -1.0, [0.0, 0.0, 0.8])?;
     Ok(())
   }
 }
@@ -527,7 +437,7 @@ impl App {
       &common::teapot_path(),
       Path::new(SHADER_PATH),
     )?;
-    let axis = Axis::load_file(display, Path::new(SHADER_PATH))?;
+    let axis = Axis::new(display)?;
     self.world.set_teapot(teapot);
     self.world.set_axis(axis);
     self.world.update(std::time::Duration::from_secs(0));

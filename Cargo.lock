@@ -368,7 +368,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath 0.18.0",
+ "glam",
  "glium",
  "image",
  "winit",
@@ -1546,8 +1546,8 @@ dependencies = [
 name = "project-02-transformations"
 version = "0.1.0"
 dependencies = [
- "cgmath 0.18.0",
  "common",
+ "glam",
  "glium",
  "winit",
 ]

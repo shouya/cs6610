@@ -8,4 +8,4 @@ common = { path = "../common" }
 
 glium = { workspace = true }
 winit = { workspace = true }
-cgmath = { workspace = true }
+glam = { workspace = true }
