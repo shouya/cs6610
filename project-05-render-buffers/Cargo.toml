@@ -8,7 +8,7 @@ common = { path = "../common" }
 
 glium = { workspace = true }
 winit = { workspace = true }
-cgmath = { workspace = true }
+glam = { workspace = true }
 image = { workspace = true }
 anyhow = { workspace = true }
 derive_more = "0.99.18"

@@ -292,7 +292,7 @@ impl GPUMesh {
   }
 }
 
-pub const fn sampler_behavior_Kd() -> glium::uniforms::SamplerBehavior {
+const fn sampler_behavior_Kd() -> glium::uniforms::SamplerBehavior {
   use glium::uniforms::SamplerWrapFunction;
 
   glium::uniforms::SamplerBehavior {
@@ -305,17 +305,18 @@ pub const fn sampler_behavior_Kd() -> glium::uniforms::SamplerBehavior {
     minify_filter: glium::uniforms::MinifySamplerFilter::Linear,
     max_anisotropy: 4,
     depth_texture_comparison: None,
+    border_color: None,
   }
 }
 
-pub const fn sampler_behavior_Ks() -> glium::uniforms::SamplerBehavior {
+const fn sampler_behavior_Ks() -> glium::uniforms::SamplerBehavior {
   glium::uniforms::SamplerBehavior {
     max_anisotropy: 1,
     ..sampler_behavior_Kd()
   }
 }
 
-pub const fn sampler_behavior_Ka() -> glium::uniforms::SamplerBehavior {
+const fn sampler_behavior_Ka() -> glium::uniforms::SamplerBehavior {
   sampler_behavior_Ks()
 }
 
