@@ -1,8 +1,8 @@
 use core::f32;
 use std::{ffi::c_void, fs::read_to_string, time::Duration};
 
-use cgmath::{InnerSpace, Matrix4, Transform, Vector3};
 use common::{math::reflect4x4, project_asset_path};
+use glam::{Mat4, Vec3};
 use glium::{
   backend::Facade, framebuffer::SimpleFrameBuffer, texture::DepthTexture2d,
   uniform, Program, Rect, Surface, Texture2d,
@@ -14,7 +14,7 @@ use crate::{
 
 pub struct ReflectivePlane {
   object: GPUObject,
-  normal: Vector3<f32>,
+  normal: Vec3,
   program: Program,
   texture: Texture2d,
   depth: DepthTexture2d,
@@ -23,10 +23,7 @@ pub struct ReflectivePlane {
 
 impl ReflectivePlane {
   pub fn new(facade: &impl Facade, object: GPUObject) -> Result<Self> {
-    let normal = object
-      .model()
-      .transform_vector(Vector3::unit_z())
-      .normalize();
+    let normal = object.model().transform_vector3(Vec3::Z).normalize();
     let (w, h) = facade.get_context().get_framebuffer_dimensions();
     let texture = Texture2d::empty(facade, w, h)?;
     let depth = DepthTexture2d::empty(facade, w, h)?;
@@ -63,10 +60,10 @@ impl ReflectivePlane {
     Ok(())
   }
 
-  pub fn reflected_view(&self, view: &Matrix4<f32>) -> Matrix4<f32> {
+  pub fn reflected_view(&self, view: &Mat4) -> Mat4 {
     let point = self.object.world_pos();
     let refl = reflect4x4(point, self.normal);
-    view * refl
+    *view * refl
   }
 
   pub fn update_world_texture(
@@ -79,9 +76,9 @@ impl ReflectivePlane {
       SimpleFrameBuffer::with_depth_buffer(facade, &self.texture, &self.depth)?;
 
     let bbox_clip =
-      // needs to use the original camera to get the final screen
-      // locations of the plane.
-      map_bounding_box(self.object.bounding_box(), camera.view_projection());
+            // needs to use the original camera to get the final screen
+            // locations of the plane.
+            map_bounding_box(self.object.bounding_box(), camera.view_projection());
 
     let (view, proj, mirror) =
       (camera.view(), camera.projection(), camera.mirror());
@@ -136,8 +133,8 @@ impl ReflectivePlane {
       .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest);
 
     let uniforms = uniform! {
-      world_texture: world_texture,
-      t: self.t,
+        world_texture: world_texture,
+        t: self.t,
     };
 
     self.object.draw_with_program(
@@ -150,33 +147,33 @@ impl ReflectivePlane {
   }
 }
 
-fn map_bounding_box(bbox: [[f32; 2]; 3], map: Matrix4<f32>) -> [[f32; 2]; 3] {
+fn map_bounding_box(bbox: [[f32; 2]; 3], map: Mat4) -> [[f32; 2]; 3] {
   let [[x1, x2], [y1, y2], [z1, z2]] = bbox;
   let mut vertices = [
-    [x1, y1, z1],
-    [x1, y1, z2],
-    [x1, y2, z1],
-    [x1, y2, z2],
-    [x2, y1, z1],
-    [x2, y1, z2],
-    [x2, y2, z1],
-    [x2, y2, z2],
+    Vec3::new(x1, y1, z1),
+    Vec3::new(x1, y1, z2),
+    Vec3::new(x1, y2, z1),
+    Vec3::new(x1, y2, z2),
+    Vec3::new(x2, y1, z1),
+    Vec3::new(x2, y1, z2),
+    Vec3::new(x2, y2, z1),
+    Vec3::new(x2, y2, z2),
   ];
 
   for vert in &mut vertices {
-    *vert = map.transform_point((*vert).into()).into();
+    *vert = map.transform_point3(*vert);
   }
 
   let (mut xmin, mut ymin, mut zmin) = (f32::MAX, f32::MAX, f32::MAX);
   let (mut xmax, mut ymax, mut zmax) = (f32::MIN, f32::MIN, f32::MIN);
 
-  for [x, y, z] in vertices {
-    xmin = xmin.min(x);
-    ymin = ymin.min(y);
-    zmin = zmin.min(z);
-    xmax = xmax.max(x);
-    ymax = ymax.max(y);
-    zmax = zmax.max(z);
+  for vec in vertices {
+    xmin = xmin.min(vec.x);
+    ymin = ymin.min(vec.y);
+    zmin = zmin.min(vec.z);
+    xmax = xmax.max(vec.x);
+    ymax = ymax.max(vec.y);
+    zmax = zmax.max(vec.z);
   }
 
   [[xmin, xmax], [ymin, ymax], [zmin, zmax]]

@@ -1,4 +1,4 @@
-use cgmath::{Deg, Matrix3, Matrix4, Point3, SquareMatrix as _, Vector3};
+use glam::{Mat3, Mat4, Vec3};
 use glium::Rect;
 
 pub struct Camera {
@@ -11,9 +11,9 @@ pub struct Camera {
   // only draw within this rectangle (window space)
   scissor: Option<Rect>,
   // cached matrices
-  m_view: Matrix4<f32>,
-  m_proj: Matrix4<f32>,
-  m_view_proj: Matrix4<f32>,
+  m_view: Mat4,
+  m_proj: Mat4,
+  m_view_proj: Mat4,
   mirror: bool,
 }
 
@@ -27,18 +27,14 @@ impl Camera {
       scissor: None,
       perspective: true,
 
-      m_view: Matrix4::identity(),
-      m_proj: Matrix4::identity(),
-      m_view_proj: Matrix4::identity(),
+      m_view: Mat4::IDENTITY,
+      m_proj: Mat4::IDENTITY,
+      m_view_proj: Mat4::IDENTITY,
       mirror: false,
     }
   }
 
-  pub fn from_view_projection(
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
-    mirror: bool,
-  ) -> Self {
+  pub fn from_view_projection(view: Mat4, proj: Mat4, mirror: bool) -> Self {
     let m_view_proj = proj * view;
 
     Self {
@@ -61,17 +57,14 @@ impl Camera {
   // sitting at a point, looking to a direction.
   // point and direction are given in world space.
   pub fn for_cubemap_face(
-    point: Point3<f32>,
-    dir: [i8; 3],
-    up: [i8; 3],
+    point: Vec3,
+    dir: Vec3,
+    up: Vec3,
     mirror: bool,
   ) -> Self {
-    let up = Vector3::new(up[0] as f32, up[1] as f32, up[2] as f32);
-    let dir = Vector3::new(dir[0] as f32, dir[1] as f32, dir[2] as f32);
+    let m_view = Mat4::look_to_rh(point, dir, up);
 
-    let m_view = Matrix4::look_to_rh(point, dir, up);
-
-    let m_proj = cgmath::perspective(cgmath::Deg(90.0), 1.0, 0.1, 100.0);
+    let m_proj = Mat4::perspective_rh(90.0f32.to_radians(), 1.0, 0.1, 100.0);
     let m_view_proj = m_proj * m_view;
 
     Self {
@@ -111,35 +104,35 @@ impl Camera {
     self.aspect_ratio = new_size.0 as f32 / new_size.1 as f32;
   }
 
-  pub fn view(&self) -> Matrix4<f32> {
+  pub fn view(&self) -> Mat4 {
     self.m_view
   }
 
-  pub fn view_projection(&self) -> Matrix4<f32> {
+  pub fn view_projection(&self) -> Mat4 {
     self.m_view_proj
   }
 
-  pub fn projection(&self) -> Matrix4<f32> {
+  pub fn projection(&self) -> Mat4 {
     self.m_proj
   }
 
-  pub fn calc_view(&self) -> Matrix4<f32> {
+  pub fn calc_view(&self) -> Mat4 {
     // default view matrix: eye at (0, 0, 2), looking at (0, 0, -1), up (0, 1, 0)
-    let dir = Matrix3::from_angle_y(Deg(self.rotation[0]))
-      * Matrix3::from_angle_x(-Deg(self.rotation[1]))
-      * Vector3::new(0.0, 0.0, 1.0);
-    let eye = Point3::new(0.0, 0.0, 0.0) + -dir * self.distance;
-    let up = Vector3::new(0.0, 1.0, 0.0);
-    let origin = Point3::new(0.0, 0.0, 0.0);
-    Matrix4::look_at_rh(eye, origin, up)
+    let dir = Mat3::from_rotation_y(self.rotation[0].to_radians())
+      * Mat3::from_rotation_x(-self.rotation[1].to_radians())
+      * Vec3::Z;
+    let eye = -dir * self.distance;
+    let up = Vec3::Y;
+    let origin = Vec3::ZERO;
+    Mat4::look_at_rh(eye, origin, up)
   }
 
-  pub fn calc_proj(&self) -> Matrix4<f32> {
+  pub fn calc_proj(&self) -> Mat4 {
     if self.perspective {
-      cgmath::perspective(cgmath::Deg(90.0), self.aspect_ratio, 0.1, 100.0)
+      Mat4::perspective_rh(90.0f32.to_radians(), self.aspect_ratio, 0.1, 100.0)
     } else {
-      cgmath::Matrix4::from_scale(1.0 / self.distance)
-        * cgmath::ortho(
+      Mat4::from_scale(Vec3::splat(1.0 / self.distance))
+        * Mat4::orthographic_rh(
           -1.0,
           1.0,
           -1.0 / self.aspect_ratio,

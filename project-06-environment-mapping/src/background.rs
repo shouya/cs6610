@@ -1,6 +1,5 @@
 use std::{fs::read_to_string, path::Path};
 
-use cgmath::SquareMatrix as _;
 use common::{project_asset_path, to_raw_image};
 use glium::{
   backend::Facade,
@@ -58,7 +57,7 @@ impl Background {
 
   pub fn draw(&self, target: &mut impl Surface, camera: &Camera) {
     let view_proj_inv: [[f32; 4]; 4] =
-      camera.view_projection().invert().unwrap().into();
+      camera.view_projection().inverse().to_cols_array_2d();
     let env_map = self
       .cubemap
       .sampled()

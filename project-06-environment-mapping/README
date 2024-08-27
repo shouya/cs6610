@@ -16,11 +16,6 @@ Controls:
 left drag: rotate camera
 right drag/wheel: change camera distance
 
-shift+left drag: rotate camera in the indirect scene (yoda)
-shift+right drag/shift+wheel: change camera distance in the indirect scene (yoda)
-
-(I didn't use alt modifier because alt+<key> is reserved by my X window manager).
-
 p: perspective/orthographic projection
 a: show/hide axis
 f6, r: reload shader
