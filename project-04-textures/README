@@ -13,3 +13,5 @@ p: perspective/orthographic projection
 a: show/hide axis
 f6: reload shader
 esc: quit
+
+Note: loading the yoda model can take up to a minute because of the triangle strip processing.

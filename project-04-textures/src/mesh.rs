@@ -305,6 +305,7 @@ const fn sampler_behavior_Kd() -> glium::uniforms::SamplerBehavior {
     minify_filter: glium::uniforms::MinifySamplerFilter::Linear,
     max_anisotropy: 4,
     depth_texture_comparison: None,
+    border_color: None,
   }
 }
 

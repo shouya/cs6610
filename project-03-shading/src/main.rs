@@ -359,7 +359,7 @@ impl ApplicationHandler for App {
   fn resumed(&mut self, event_loop: &ActiveEventLoop) {
     if self.window.is_none() {
       let window_attrs = WindowAttributes::default()
-        .with_title("Teapot")
+        .with_title("Project 03")
         .with_inner_size(LogicalSize::new(800, 600));
 
       match event_loop.create_window(window_attrs) {

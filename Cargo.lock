@@ -1569,9 +1569,9 @@ name = "project-04-textures"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cgmath 0.18.0",
  "common",
  "derive_more",
+ "glam",
  "glium",
  "image",
  "rand 0.8.5",
