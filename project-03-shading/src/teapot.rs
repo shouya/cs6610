@@ -1,13 +1,12 @@
 use std::time::Duration;
 
-use cgmath::Matrix as _;
-use cgmath::Matrix3;
-use cgmath::SquareMatrix as _;
-use cgmath::Transform;
 use derive_more::From;
 
-use cgmath::Matrix4;
 use common::SimpleObj;
+use glam::EulerRot;
+use glam::Mat3;
+use glam::Mat4;
+use glam::Vec3;
 use glium::{backend::Facade, uniform, DrawParameters, Frame};
 
 use crate::mesh::TriangleIndex;
@@ -144,11 +143,10 @@ impl<Mesh> Teapot<Mesh> {
     self.render_mode = render_mode;
   }
 
-  fn model_transform(&self) -> Matrix4<f32> {
-    Matrix4::from_scale(0.05)
-      * Matrix4::from_angle_y(cgmath::Rad(self.rotation))
+  fn model_transform(&self) -> Mat4 {
     // the object itself is rotated 90 to the front, let's rotate it back a little.
-      * Matrix4::from_angle_x(cgmath::Deg(-90.0))
+    Mat4::from_scale(Vec3::splat(0.05))
+      * Mat4::from_euler(EulerRot::YXZ, self.rotation, -90f32.to_radians(), 0.0)
   }
 
   pub fn upload<GPUMesh>(&self, surface: &impl Facade) -> Teapot<GPUMesh>
@@ -172,30 +170,24 @@ impl<Mesh> Teapot<Mesh> {
   where
     Mesh: mesh::GPUMeshFormat,
   {
-    let mv: Matrix4<f32> = camera.view() * self.model_transform();
-    let mv3: Matrix3<f32> = Matrix3 {
-      x: mv.x.truncate(),
-      y: mv.y.truncate(),
-      z: mv.z.truncate(),
-    };
-    let mv_n: Matrix3<f32> = mv3.invert().unwrap().transpose();
-    let mvp: Matrix4<f32> = camera.projection() * mv;
+    let mv: Mat4 = camera.view() * self.model_transform();
+    let mv3: Mat3 = Mat3::from_mat4(mv);
+    let mv_n: Mat3 = mv3.inverse().transpose();
+    let mvp: Mat4 = camera.projection() * mv;
 
     // in view space
-    let light_pos: [f32; 3] = camera
-      .view()
-      .transform_point(light.position_world().into())
-      .into();
+    let light_pos: Vec3 =
+      camera.view().transform_point3(light.position_world());
 
     let uniforms = uniform! {
-      mvp: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mvp),
-      mv: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mv),
-      mv_n: <Matrix3<f32> as Into<[[f32; 3]; 3]>>::into(mv_n),
+      mvp: mvp.to_cols_array_2d(),
+      mv: mv.to_cols_array_2d(),
+      mv_n: mv_n.to_cols_array_2d(),
       mode: self.render_mode as u32 as i32,
       k_a: [0.1, 0.1, 0.1f32],
       k_d: [1.0, 0.0, 0.0f32],
       k_s: [1.0, 1.0, 1.0f32],
-      light_pos: light_pos,
+      light_pos: light_pos.to_array(),
       light_color: light.color(),
       shininess: 100.0f32,
     };

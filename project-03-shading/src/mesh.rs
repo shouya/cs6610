@@ -290,7 +290,7 @@ impl GPUMeshFormat for TriangleStripGPU {
     uniforms: &impl Uniforms,
     params: &DrawParameters<'_>,
   ) {
-    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() != Ok("1") {
+    if std::env::var("NO_DEBUG_TRIANGLE_STRIP").as_deref() == Ok("1") {
       frame
         .draw(&self.vbo, &self.ibo, &self.program, uniforms, params)
         .expect("Failed to draw");

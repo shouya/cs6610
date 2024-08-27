@@ -6,12 +6,13 @@ All CS6610 and optional requirements implemented.
 
 Controls:
 
-1-9: Render in specific mode:
-  - 1: Default (FullBlinn)
-  - 2: SurfaceNormal
-  - 3: Depth
-  - 4: ViewPosition
-  - 5: Diffuse
+0-9: Render in specific mode:
+  - 0: Default (FullBlinn)
+  - 1: SurfaceNormal
+  - 2: Depth
+  - 3: ViewPosition
+  - 4: Diffuse
+  - 5: SpecularBlinn
   - 6: FullBlinn
   - 7: SpecularBlinn
   - 8: FullPhong
@@ -23,11 +24,11 @@ right drag/wheel: change camera distance
 p: perspective/orthographic projection
 a: show/hide axis
 t: switch between teapots built from different mesh modes
+  - triangle strip with element index
+    by default shows debugging color for different strips, start the application with
+    NO_DEBUG_TRIANGLE_STRIP=1 environment to render the mesh normally
   - triangle list
   - triangle list with element index
-  - triangle strip with element index
-    default shows debugging color for different strips, start the application with
-    NO_DEBUG_TRIANGLE_STRIP=1 environment to render the mesh normally
 
   Note: all these modes should render exactly the same.
 

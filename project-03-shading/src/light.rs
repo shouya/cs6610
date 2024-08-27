@@ -1,5 +1,5 @@
-use cgmath::{Matrix as _, Matrix3, Matrix4, Point3, Rad, Transform};
 use common::SimpleObj;
+use glam::{EulerRot, Mat3, Mat4, Vec3};
 use glium::{backend::Facade, uniform, DrawParameters};
 
 use crate::{
@@ -34,20 +34,20 @@ impl Light {
       gpu: None,
     }
   }
-  pub fn position_world(&self) -> [f32; 3] {
-    let location = Point3::new(self.distance, self.distance, 0.0);
-    Matrix4::from_angle_y(Rad(self.rotation))
-      .transform_point(location)
-      .into()
+  pub fn position_world(&self) -> Vec3 {
+    let location = Vec3::new(self.distance, self.distance, 0.0);
+    let transform =
+      Mat4::from_euler(EulerRot::XYZ, 0.0, self.rotation.to_radians(), 0.0);
+    transform.transform_point3(location)
   }
 
   pub fn add_rotation(&mut self, delta: f32) {
     self.rotation += delta;
   }
 
-  fn model(&self) -> Matrix4<f32> {
-    Matrix4::from_translation(self.position_world().into())
-      * Matrix4::from_scale(0.05)
+  fn model(&self) -> Mat4 {
+    Mat4::from_translation(self.position_world())
+      * Mat4::from_scale(Vec3::splat(0.05))
   }
 
   pub fn color(&self) -> [f32; 3] {
@@ -59,31 +59,23 @@ impl Light {
       return Ok(());
     };
 
-    let mv: Matrix4<f32> = camera.view() * self.model();
-    let mv3: Matrix3<f32> = Matrix3 {
-      x: mv.x.truncate(),
-      y: mv.y.truncate(),
-      z: mv.z.truncate(),
-    };
-    let mv_n: Matrix3<f32> =
-      <Matrix3<f32> as Transform<Point3<f32>>>::inverse_transform(&mv3)
-        .unwrap()
-        .transpose();
-    let mvp: Matrix4<f32> = camera.projection() * mv;
+    let mv: Mat4 = camera.view() * self.model();
+    let mv3: Mat3 = Mat3::from_mat4(mv);
+    let mv_n: Mat3 = mv3.inverse().transpose();
+    let mvp: Mat4 = camera.projection() * mv;
 
     // assume the light is lit up by something on the origin
-    let light_pos: [f32; 3] =
-      camera.view().transform_point([0.0; 3].into()).into();
+    let light_pos: Vec3 = camera.view().transform_point3(Vec3::ZERO);
 
     let uniforms = uniform! {
-      mvp: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mvp),
-      mv: <Matrix4<f32> as Into<[[f32; 4]; 4]>>::into(mv),
-      mv_n: <Matrix3<f32> as Into<[[f32; 3]; 3]>>::into(mv_n),
+      mvp: mvp.to_cols_array_2d(),
+      mv: mv.to_cols_array_2d(),
+      mv_n: mv_n.to_cols_array_2d(),
       mode: 9, // plain color
       k_a: [0.1, 0.1, 0.1f32],
       k_d: self.color,
       k_s: [1.0, 1.0, 1.0f32],
-      light_pos: light_pos,
+      light_pos: light_pos.to_array(),
       light_color: [1.0f32; 3],
       shininess: 10.0f32,
     };

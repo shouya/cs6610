@@ -1556,9 +1556,9 @@ dependencies = [
 name = "project-03-shading"
 version = "0.1.0"
 dependencies = [
- "cgmath 0.18.0",
  "common",
  "derive_more",
+ "glam",
  "glium",
  "rand 0.8.5",
  "winit",
