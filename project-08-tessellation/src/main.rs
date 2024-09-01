@@ -196,7 +196,7 @@ impl App {
       return;
     };
 
-    self.world.render(&display).expect("Failed to render");
+    self.world.render(display).expect("Failed to render");
   }
 
   fn update(&mut self) {

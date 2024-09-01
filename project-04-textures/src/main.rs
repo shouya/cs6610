@@ -343,12 +343,9 @@ impl App {
   fn reload_shaders(&mut self) {
     if let Some(display) = &self.display {
       for obj in self.world.objects.iter_mut() {
-        match obj.reload_shader(display) {
-          Err(e) => {
-            eprintln!("Failed to reload shader: {}", e);
-            return;
-          }
-          _ => {}
+        if let Err(e) = obj.reload_shader(display) {
+          eprintln!("Failed to reload shader: {}", e);
+          return;
         }
       }
       println!("Reloaded shaders");
