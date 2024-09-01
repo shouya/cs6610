@@ -182,7 +182,7 @@ impl World {
       }
     }
 
-    for obj in &self.object {
+    if let Some(obj) = &self.object {
       let uniforms = if let Some(sampler) = &sampler {
         dynamic_uniform! {
             map_Kd: sampler,

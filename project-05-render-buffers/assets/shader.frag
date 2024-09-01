@@ -60,6 +60,7 @@ void main() {
   } else {
     oKa = Ka;
   }
+  oKa += 0.1;
 
   color = vec4(light_color * (geom * oKd + spec * oKs) + oKa, 1.0);
 }
