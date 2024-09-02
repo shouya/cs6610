@@ -1,0 +1,2079 @@
+* Info
+
+Course page: https://graphics.cs.utah.edu/courses/cs6610/spring2021
+
+Lectures: [[https://www.youtube.com/watch?v=UVCuWQV_-Es&list=PLplnkTzzqsZS3R5DjmCQsqupu43oS9CFN&index=1][Interactive Graphics 01 - Introduction - YouTube]]
+
+* Lectures
+
+** 01: Course Description
+
+The course will be taught in OpenGL.
+
+Metal, Vulkan, and DirectX are lower-level APIs that allows more control over the hardware, but OpenGL is still widely used.
+
+** 02: Images and Transformations
+
+A pixel is not a square. It's a sample of a square at the middle of the square.
+
+Affine transformations:
+
+- Translation
+- Rotation (orthogonal matrix)
+- Scaling (diagonal matrix)
+- Skew (= rotation + scaling + rotation by SVD)
+
+How to handle translation: homogeneous coordinates.
+
+- coordinates is represented as vector with an extra 1 component
+- instead of 2x2 matrix we have 3x3 with =[0 0 1]= in the last row
+- translation is then able to make use of the "1" in the last row to add multiples of that to the original coordinates
+
+3d:
+
+- rotation can happen in three dimensions (Euler angles)
+  + rotation multiplication order is important
+
+transformations:
+
+- model transformation: model/object space to world space
+  + model space: individual models
+  + world space: the models are placed in the world
+- viewing transformation: world space to view/camera space
+  + view space: camera transformation
+- projection transformation: view space to canonical view volume
+  + canonical view volume: x, y, z all go from -1 to 1
+    - also known as clip space i believe?
+  + orthogonal projection: just scale and translate the view coordinates to normalize it
+  + perspective projection: apply an extra scaling on x and y depending to z
+    - x' = c*x/z
+    - y' = c*y/z
+    - after applying perspective deformation, apply orthogonal projection to normalize the coordinates to fit it in the canonical view volume
+
+extended definition for homogeneous coordinates:
+
+- define =[ax ay az a]= as equivalent to =[x y z 1]=.
+  + in other words, =[x y z a]= is definitionally equal to =[x/a y/a z/a 1]=.
+- solves the problem that a matrix can't do perspective transformation because dividing by z (non-constant) is non-linear.
+
+** 03: Rendering Algorithms
+
+Rasterization:
+
+- for each triangle, find the pixels for that
+
+- Painter's algorithm
+  - sort the triangles by depth and draw them from back to front
+  - downsides:
+    + triangles can overlap
+    + sorting is expensive
+- Z-buffer algorithm
+  - for each pixel, store the depth of the closest triangle
+  - only render a pixel if the depth is closer than the previous one
+  - solves the overlapping problem
+  - downsides:
+    + transparent objects needs to be rendered after opaque objects
+      - still requires some kinds of sorting
+      - can be mitigated by drawing opaque objects first, then sorted transparent objects
+- A-buffer algorithm
+  - store a list of fragments (RGBA + depth) for each pixel
+  - solves the transparent object problem
+  - downsides:
+    + dynamic memory usage, it's non-trivial to implement a sorted linked list in GPU
+- REYES (Render Everything You Ever Saw)
+  - subdivide each face into micro-polygons smaller than a pixel
+  - can render in great detail, but not suitable for interactive rendering
+
+Ray-tracing:
+
+- for each pixel, find the nearest object
+- upsides:
+  + easy to implement transparency, reflection, refraction, shadow, etc.
+- downsides:
+  + the whole scene needs to be ready before rendering
+    - in contrast, the primitives can be streamed to GPU for rasterization
+    - access to the primitives is random, not sequential
+  + for each ray cast, it needs to check all objects in the scene, which is expensive
+    - optimization: subdivide the scene into a spatial partitioning structure
+      + also means it's difficult to do on GPU
+- types:
+  + ray casting: only trace primary ray
+
+(replace "triangle" with "primitive" for more accurate description)
+
+Antialiasing:
+
+- SSAA: 4x samples (RGBA+Z) per pixel
+- MSAA: RGBA + 4xZ per pixel, use the Z information to compute the composition of the color
+
+Third-option: rasteration + ray-tracing hybrid
+
+- rasterization is only able to solve primary visibility issue.
+- ray-tracing is able to solve secondary effects
+  + reflections/refractions/shadows/realistic illumination
+
+Secondary effects are possible with rasterization with some magic tricks.
+
+- example: for reflection, render the same thing twice and put a semi-transparent surface on the reflected object
+
+** 04: Windowing APIs
+
+API choices:
+
+- GLUT
+- FreeGLUT
+- GLFW
+- Qt
+
+Main function:
+
+- glut initialization
+  + init glut
+    - =glutInit(&argc, argv)=
+  + create a window
+    - =glutInitWindowSize(800, 600)=
+    - =glutInitWindowPosition(100, 100)=
+    - =glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE)=
+    - =glutCreateWindow("Hello, world!")=
+  + register glut callbacks
+- opengl initialization
+  + set background color: =glClearColor(0.0, 0.0, 0.0, 0.0)=
+  + create buffers, create textures, compile shaders
+- start main loop: =glutMainLoop()=
+
+Callbacks:
+
+- glutDisplayFunc: called when the window needs to be redrawn
+  + =glClear=: used to clear display buffer and depth buffer
+  + OpenGL draw calls
+  + =glutSwapBuffers=: swap the front and back buffers
+- glutKeyboardFunc: called when user presses a key
+  + e.g. =glutLeaveMainLoop()=
+- glutSpecialFunc: called when user presses a special key (non-ascii)
+- glutMouseFunc: called when user clicks a mouse button
+- glutMotionFunc: called when user moves the mouse while holding a mouse button
+- glutPassiveMotionFunc: called when user moves the mouse without holding a mouse button
+- glutReshapeFunc: called when the window is resized (called once at the beginning)
+- glutIdleFunc: called when the system is idle, used for animations, etc
+  + =glutGet(GLUT_ELAPSED_TIME)=: get the number of milliseconds since glutInit called
+  + =glutPostRedisplay()=: request a redraw
+
+** 05: Introduction to Modern OpenGL
+
+Modern rendering pipeline:
+
+1. CPU sends data to GPU
+2. vertex shader
+3. (optional) tessellation shader
+4. (optional) geometry shader: has holistic access to the primitives.
+5. primitive setup and rasterization
+6. fragment shader
+7. blending
+
+Step 2-7 runs on GPU. The shaders are programmable. Vertex and Fragment shaders are mandatory.
+
+Example Vertex shader:
+
+#+begin_src glsl
+#version 330 core
+
+layout(location = 0) in vec3 pos;
+uniform mat4 mvp;
+
+void main() {
+  gl_Position = mvp * vec4(pos, 1.0);
+}
+#+end_src
+
+input vs uniform:
+
+- an input variable (marked with =in= keyword) is a *per-vertex* variable
+- a uniform variable is a *per-draw* variable
+
+Location: automatically inferred if unspecified, starting from 0.
+
+Example Fragment shader:
+
+#+begin_src glsl
+#version 330 core
+
+layout(location = 0) out vec4 color;
+
+void main() {
+  color = vec4(1.0, 0.0, 0.0, 1.0);
+}
+#+end_src
+
+Shaders are arranged in a program:
+
+1. =GLuint program = glCreateProgram()=
+2. compile vertex shader
+   1. =GLuint =vs = glCreateShader()=
+   2. =const char *vsSource[] = readFromFile("shader.vert")=
+   3. =glShaderSource(vs, 1, vsSource, NULL)=
+   4. =glCompileShader(vs)=
+   5. =glAttachShader(program, vs)=
+3. compile fragment shader
+   1. =GLuint =fs = glCreateShader()=
+   2. =const char *fsSource[] = readFromFile("shader.frag")=
+   3. =glShaderSource(fs, 1, fsSource, NULL)=
+   4. =glCompileShader(fs)=
+   5. =glAttachShader(program, fs)=
+4. link the program
+   1. =glLinkProgram(program)=
+
+What are primitives:
+
+- =GL_POINTS=
+- =GL_LINES=
+- =GL_LINE_STRIP=
+- =GL_LINE_LOOP=
+- =GL_TRIANGLES=
+- =GL_TRIANGLE_STRIP=
+- =GL_TRIANGLE_FAN=
+
+See [[https://www.khronos.org/opengl/wiki/Primitive][Primitive - OpenGL Wiki]] for the expected memory layout for each primitives.
+
+Vertex Buffer Object (VBO), these are the input data to the pipeline.
+
+1. =GLuint buffer;=
+2. =glGenBuffers(1, &buffer)=: 1 is the number buffers to generate
+3. =glBindBuffer(GL_ARRAY_BUFFER, buffer);=
+   NOTE the "bind" operation is used extensively in OpenGL. It means to bind an object as the current operating object to the context. Any future operation that requires an object of the type will use the bound object.
+4. =glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW)=
+   NOTE the =buffer= is not specified, because the =GL_ARRAY_BUFFER= is bound to the =buffer= in the previous step.
+   - =STATIC_DRAW= is an optimization hint to the driver to indicate the usage pattern of the buffer is that it's not going to be modified frequently.
+
+Associating a VBO to a shader attribute:
+
+1. =GLuint loc = glGetAttribLocation(program, "pos")=
+2. =glEnableVertexAttribArray(loc)=
+3. =glVertexAttribPointer(loc, 3, GL_FLOAT, GL_FALSE, 0, 0)=
+   NOTE the VBO is not specified in parameter, as the =GL_ARRAY_BUFFER= is bound to the VBO in the previous step.
+
+Vertex Array Object (VAO): A reused information object on which VBO associate to which shader attribute. Each =glVertexAttribPointer= works on the currently bound VAO.
+
+1. =GLuint vao;=
+2. =glGenVertexArrays(1, &vao)=
+3. =glBindVertexArray(vao)=
+4. then do the VBO and shader attribute association
+
+Rendering:
+
+1. =glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)=
+2. =glUseProgram(program)=
+3. =glDrawArrays(GL_TRIANGLES, 0, num_trigs)=
+   NOTE "Array" here refers to the =GL_ARRAY_BUFFER= bound previously
+4. =glutSwapBuffers()=
+
+Overview:
+
+- for drawing a single object:
+  + initialization
+    - Create VAO
+    - Create VBO
+    - Compile shaders
+  + rendering
+    - Assign VBO to vertex attribute
+    - Call =glDrawArrays=
+
+- for drawing multiple objects:
+  + initialization
+    - Create VAOs
+    - Create VBOs
+    - Compile shaders
+  + rendering
+    - For each VAO
+      + Assign VBOs to vertex attributes
+      + Call =glDrawArrays=
+
+** 06: Introduction to GLSL and OpenGL Extensions
+
+Fragment shader input:
+
+- the vertex shader's input comes from the VBO, but fragment shader doesn't directly consume any VBO
+- answer:
+  + linker will check for the variable name mismatch.
+- per-vertex input:
+  + the vertex shader can accept additional inputs and pass them to the fragment shader.
+    - Every input (=in=) from fragment shader must come from an output (=out=) of the vertex shader.
+    - The variable's name must match.
+  + for fragment shader to accept vertex data, it must be sent through the vertex shader.
+    - there is no such thing as fragment shader buffer
+    - the vertex output will be *interpolated* across the triangle as the input of the fragment shader
+- per-draw input:
+  + uniform variable can be set on the fragment shader
+
+Blending:
+
+- You can write alpha value in fragment shader but it's not going to write into the back buffer directly yet.
+- The non-programmable Blending stage takes place after the fragment shader.
+  + non-programmable but can be customized in fixed ways
+  + you can do alpha blending
+
+GLSL:
+
+- similar to c
+- has structs
+- has no =#include= because it's a string compiled at runtime
+  + workaround: can preprocess the shader source before passing it to OpenGL
+- swizzling expression: =vec.xyz= and =vec.rgb=
+- no printing inside shader, debugging is hard
+  + can use output image for debugging
+
+Setting uniform variables:
+
+#+begin_src c
+GLuint loc = glGetUniformLocation(program, "uniform_name");
+glUseProgram(program); // same as binding, but for program
+glUniform1f(loc, 0.5f); // use the used program in the context
+
+// 1fv: 1: dimension, f: float, v: array
+// glUniform3f(loc, 0.5f, 0.5f, 0.5f); // set a vec3
+// glUniform3fv(loc, 1, &array);
+
+// other extensions
+glUniform1i64vNV(loc, 1, &i64val); // pointer to value, NV means NVIDIA extension
+#+end_src
+
+ARB: Architecture Review Board. Vendor extension -> ARB -> core
+
+GL headers:
+
+#+begin_src c
+#include <GL/gl.h> // old, version 1.1 header
+
+// newer OpenGL versions:
+#include <glext.h>
+#include <wingdi.h>
+// the gl functions are not defined! in glext.h.
+// These APIs are defined as function pointer types and we need to ask the driver to give us the actual function pointers.
+PFNGLGENVERTEXARRAYSPROC glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays"); // windows specific, from wingdi.h
+// then use like: glGenVertexArrays(1, &vao);
+
+// to simplify this, use GLEW (OpenGL Extension Wrangler)
+#include <glew.h>
+glewInit(); // then all the functions are loaded
+// alternative to GLEW is glad (GL/GLES/EGL/GLX/WGL Loader-Generator)
+#+end_src
+
+OpenGL vs GLSL versions:
+
+| OpenGL | GLSL |
+|--------+------|
+|    2.0 | 1.10 |
+|    2.1 | 1.20 |
+|    3.0 | 1.30 |
+|    3.1 | 1.40 |
+|    3.2 | 1.50 |
+|    3.3 | 3.30 |
+
+This is because when OpenGL comes out there is no GLSL. The versions mismatch confusion was resolved since OpenGL 3.3.
+
+OpenGL 3.3 is a milestone version that drops some backward compatibility. So some old functions may no longer work since OpenGL 3.3.
+
+The list of functions from the OpenGL version bind to what's called a =OpenGL context=.
+
+#+begin_src c
+// FreeGLUT allows selecting the OpenGL context
+glutInitContextVersion(4, 5); // init context for OpenGL 4.5
+glutInitContextFlags(GLUT_DEBUG); // optional, enable debug context to let errors generate interrupts for debugging
+glutCreateWindow("OpenGL");
+const char *version = glGetString(GL_VERSION);
+#+end_src
+
+So the initialization should start with creating OpenGL context and window.
+
+** 07: Triangular Meshes
+
+GPU only render triangles. Even point and line primitives are processed into quads which are tessellated into triangles before rendering.
+
+Barycentric coordinates:
+
+- p = a * v0 + b * v1 + c * v2
+- a, b, c are called the barycentric coordinates
+- a+b+c=1 means p is coplanar with the triangle formed by v0, v1, v2
+- 0 <= a, b, c <= 1 means p is inside the triangle
+- a, b, c are interpolated across the triangle for all vertex attributes (position, normal, color, etc)
+
+Rasterization only generate samples for points *inside* the triangle.
+
+Vertex attributes: position, normal, color, texture coordinates, etc.
+
+The way to render a mesh:
+
+- an array of triangles and attributes: many duplicated vertices
+- an array of element buffer: more efficient
+  + caveat: the index in an element buffer correspond the same index in all vertex attributes
+    - but obj file format allows for different indices for different attributes
+    - solution: preprocess the obj file to make the indices consistent
+      + how? duplicate the vertices with different indices
+
+Element buffer: same as vertex buffer. difference:
+
+- bound to =GL_ELEMENT_ARRAY_BUFFER=
+- drawn using =glDrawElements= (instead of =glDrawArrays=)
+
+More efficient way to render triangles: triangle strips (GL_TRIANGLE_STRIP).
+
+- after the initial triangle, each point defines a new triangle with the previous two points
+- needs to process mesh into strips before drawing
+- disconnected strips can be drawn separately (costly) or use a trick to connect them
+  + trick: duplicate the last point of the first mesh, and duplicate the first point of the second mesh.
+    - example: a1, a2, a3, a4; b1, b2, b3, b4 => a1, a2, a3, a4, a4, b1, b1, b2, b3, b4
+    - there will be degenerate triangles (zero area) so rasterization will ignore them
+      + a3, a4, a4
+      + a4, b4, b1
+      + b1, b1, b2
+    - more efficient than multiple-draw calls
+
+GL_TRIANGLE_FAN: less useful. maybe useful for drawing polygons?
+
+** 08: Lights and Shading
+
+light direction (ω), surface normal (n), viewing direction (v), reflection direction (r).
+
+Amount of light (geometry term): cos(θ) = n • ω
+
+Materials:
+
+- Lambertian (diffuse) material: C = I cos(θ) K_d
+- Phong material: C = I (cos(θ) K_d + cos(α)^p K_s)
+  + α = angle between the reflection direction (r) and the viewing direction (v)
+  + r = 2(n • ω)n - ω
+  + p describes the surface smoothness, that determines size of the specular highlight
+  + mirror-like reflection of light-source to the camera, depends on the angle of
+  + should really be C = I cos(θ) (K_d + cos(α)/cos(θ) K_s) because cos(θ) affects the specular reflection.
+- Modified Phong material: C = I cos(θ) (K_d + cos(α) K_s)
+- Blinn material: C = I (cos(θ) K_d + cos(α)^p K_s)
+  + α = angle between the half vector (h) and the surface normal (n)
+  + half vector: the unit vector in middle of viewing direction and the light direction
+  + h = normalize(v + ω)
+  + similar result to Phong material, more realistic looking (less plastic-like)
+
+Lights:
+
+- directional light: light comes from a direction, no position (sunlight)
+  + =ω= is the direction of the light
+- point light: light comes from a point, radiates in all directions
+  + =ω= is the direction from the point to the light
+- spot light: light comes from a point, radiates in a cone
+  + =ω= is the direction from the point to the light, clamped by the cone angle
+- more types
+
+Important: *to do anything with two vector (e.g. dot product, addition, etc), they must be in the same space*.
+
+Shader transformation:
+
+- people often do shading of light in view space because it's easier to get the viewing direction.
+  + normalize(position of point - position of camera)
+  + position of camera in view space is 0,0,0
+  + therefore, the viewing direction is just normalize(position of point)
+- transforming point in homogenuous coordinates: M * [x y z 1]
+- transforming vector in homogenuous coordinates: M * [x y z 0]
+  + we only need 3x3 matrix for vector because there is no translation
+- however, transforming normals is different
+  + non-uniform scaling result in surface normal no longer perpendicular to the surface
+  + actually we need the inverse of the non-uniforming scaling components
+  + how? needs to SVD the matrix (M=R₂SR₁), then M'=R₂S⁻¹R₁.
+  + easy way: M' = (M⁻¹)ᵀ
+    - M=R₂SR₁, M⁻¹=R₁⁻¹S⁻¹R₂⁻¹, (M⁻¹)ᵀ=(R₂⁻¹)ᵀS⁻¹(R₁⁻¹)ᵀ=R₂S⁻¹R₁
+    - since for rotational matrix, =R⁻¹=Rᵀ=. and the transpose of scaling matrix (diagonal matrix) is the same as the original matrix.
+  + Therefore, to transform the normals, do (M₃ₓ₃⁻¹)ᵀ * n instead.
+
+Legacy OpenGL for lighting (no longer recommended):
+
+#+begin_src c
+glEnable(GL_LIGHTING);
+glEnable(GL_LIGHT0);
+glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+glMaterialfv(GL_FRONT, GL_SPECULAR, specular);
+glMaterialfv(GL_FRONT, GL_SHININESS, shininess);
+...
+#+end_src
+
+
+- Legacy OpenGL: Gouraud shading
+  + shade each vertices
+  + interpolate the color across the triangle
+  + in legacy opengl, the rendering pipeline is non-programmable, the lighting is done in the vertex step. (fragment shader handles texturing)
+    - because shading in fragment shader is expensive
+  + that's why the name "vertex shader" stuck even though now it's not for shading.
+- Today, we use "phong shading" (not to be confused with phong material)
+  + do not shade in vertex shader, vertex shader
+  + interpolate the surface normal across the triangle
+    - the interpolated surface normal may not be unit vector, needs to be normalized
+  + then shaded in fragment shader
+
+On CPU we need to provide three matrics:
+
+- MV (4x4): to project position and vector to view space (for computing lighting)
+- MV for normals (3x3): to project normals to view space
+- P (4x4): to project view space to clip space for rasterization
+
+Also on CPU:
+
+- transform the light direction/position to view space, provide it as uniform
+  + computing the same value over and over on fragment shader is wasteful
+
+Vertex shader:
+
+- transform the position with model-view matrix, store it in a varying variable
+- transform the position with model-view-projection matrix, store it in gl_Position
+- transform the normal with model-view normal matrix, store it in a varying variable
+
+Fragment shader:
+
+- compute the normalized normal
+- compute lighting and shading
+
+** 09: Textures
+
+The mapping problem: map a 2D image to a 3D object.
+
+Texture mapping in Computer Graphics:
+
+- map 3D object (triangles) to 2D image (texture)
+- each triangle on the object is mapped to a triangle on the texture
+  + from: object coordinates
+  + to: texture coordinates
+  + interpolated across the triangle (barycentric coordinates)
+
+Texture pixel: texel.
+
+Nearest filtering: pick the nearest texel.
+
+Bilinear filtering: linearly interpolate between the nearest 4 texels.
+
+- Downside: flickering at far distance
+- Cause: when texel is larger than a screen pixel, discontinuity in the texture coordinates. You get jumps instead of averaged out colors.
+- Fix: mipmapping. Precompute multiple versions of the texture at different resolutions (2^(-n) width).
+
+Trilinear filtering: bilinearly interpolate between two nearest mipmaps, and then linearly interpolate between these two colors.
+
+- Downside: too much blurring
+- Cause: the mapped pixel on texel is not a square, but an deformed quad. Assuming it's square and taking the central point is not accurate.
+- Fix: sample multiple points at higher resolution mipmap levels along the deformation direction and average them.
+  + this technique is called anisotropic filtering.
+  + still not perfect but better than trilinear filtering
+
+** 10: Textures on the GPU
+
+Textures on GPU: 1D, 2D, 3D
+
+Procedural texture: c=f(u) where u is texture coordinates and c is a color.
+
+There is no filtering for procedural texture. You have to implement it yourself with screen space derivative input.
+
+uv vs st coordinateS:
+
+- uv: unnormalized, [0, width) x [0, height)
+  + 2DRectangleTexture
+  + rarely used
+- st: normalized, [0, 1] x [0, 1]
+  + 2DTexture
+- confusion: st coordinates are usually caleld uv coordinates
+
+Sampling outside texture coordinate area: texture tiling.
+
+- clamp to edge
+- repeat
+- mirrored repeat
+- GPU supports different tiling modes for different dimensions
+
+GPU pipeline for texture:
+
+- texture unit is the hardware unit used to sample the texture
+- texture unit is accessible from both vertex and fragment shaders
+  + usually only used in fragment shader
+  + in vertex shader, it's used for displacement mapping
+- each texture unit is tied to a texture
+  + each shader can access to a limited numbers of texture units (depending on the hardware)
+  + requires binding texture unit to a texture before use
+
+Texture setup:
+
+- on CPU, generate/read the texture data (raster image)
+- =GLuint texId; glGenTextures(1, &texId)=
+- =glBindTexture(GL_TEXTURE_2D, texId)=
+- =glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)=
+- =glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)=: when texel is larger than pixel, use bilinear
+  + or use =GL_LINEAR_MIPMAP_LINEAR=, before using mipmaps, ask the GPU to generate mipmaps
+    - the two linears: first on the same level, second between levels (can be nearest)
+  + =glGenerateMipmap(GL_TEXTURE_2D)=
+    - not necessarily need to call generate mipmaps before =glTexParameteri=. It works as long as the mipmap is there when it's needed.
+- =glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)=: when texel is smaller than pixel, use bilinear
+- =glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)=: tiling mode
+  + =WRAP_S= / =WRAP_T= direction
+  + =GL_CLAMP_TO_EDGE=, =GL_REPEAT=, =GL_MIRRORED_REPEAT=: tiling mode
+- =glActiveTexture(GL_TEXTURE0)=: select the texture unit
+- =glBindTexture(GL_TEXTURE_2D, texId)=: bind the texture to the texture unit
+- =GLint sampler = glGetUniformLocation(program, "tex")=: get the uniform location
+- =glUseProgram(program)=
+- =glUniform1i(sampler, 0)=: set the texture unit index to the uniform
+  + 0: texture unit index
+  + max number of texture units can be queried with =glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS)=
+
+
+Sampling parameter and texture data can be separate. It's possible to have different ways to sample the same texture data.
+
+GLSL:
+
+#+begin_src glsl
+uniform sample2D tex;
+
+in vec2 texCoord;
+
+void main() {
+  color = texture(tex, texCoord);
+}
+#+end_src
+
+There is a glsl function get screen space derivative of any input variables.
+
+** 11: Render to Texture
+
+Rasterization doesn't solve the secondary ray problems. For example, reflection, refraction, shadow, realistic illumination, etc.
+
+It seems like we need a way to incorporate the data of the scene at the fragment shading phase, but which is impossible.
+
+But we have access to textures during fragment shading, so we can put information into a texture and use it. For example we can render the scene from a different angle into a texture. And use that texture for rendering an object, so it looks like the object is reflecting the scene.
+
+How to do it:
+
+- Create a frame buffer
+  #+begin_src c
+  GLuint frameBuffer;
+  glGenFramebuffers(1, &frameBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+  #+end_src
+- Create a texture
+  #+begin_src c
+  GLuint renderTexture;
+  glGenTextures(1, &renderTexture);
+  glBindTexture(GL_TEXTURE_2D, renderTexture);
+  // note the data is specified NULL, this way the GPU will allocate the texture but not attempting to copy anything.
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  #+end_src
+- Create depth buffer (optional)
+  #+begin_src c
+  GLuint depthBuffer;
+  glGenRenderbuffers(1, &depthBuffer);
+  glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+  glRenderBufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, width, height);
+  #+end_src
+- Configure the frame buffer
+  #+begin_src c
+  glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+  glFramebufferRenderBuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+  glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, renderTexture, 0);
+
+  GLenum drawBuffers[1] = {GL_COLOR_ATTACHMENT0}; // Note: OpenGL allows us to draw on multiple textures at the same time. Here we only use one.
+  glDrawBuffers(1, drawBuffers);
+
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+    // error
+  }
+  #+end_src
+- Render to texture
+  #+begin_src c
+  // set frame buffer target & render
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frameBuffer);
+  glViewport(0, 0, width, height);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glDrawArrays(...);
+
+  // set frame buffer back to the back buffer
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // 0 is the back buffer.
+                                             // sometimes the back buffer has other id,
+                                             // query with glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &origFB);
+  glViewPort(0, 0, screenWidth, screenHeight);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glDrawArrays(...);
+  #+end_src
+
+** 12: The Rendering Equation
+
+Lo(ωo) = Le(ωo) + ∫f(ωi, ωo) Li(ωi) (n • ωi) dωi
+
+Phong/Blinn material:
+
+C=Icos(θ)(Kd+Ks (cos(ϕ))^α/cos(θ))
+
+More generally,
+
+C=Icos(θ)fᵣ(ω, v) where ω is the light direction, v is the viewing direction.
+
+The material is defined by this fᵣ, known as the BRDF (Bidirectional Reflectance Distribution Function).
+
+If we zoom in to the surface, we can see the surface is either smooth or rough. When a beam of light shine on the patch of surface, some of it get scattered in all directions, other get reflected in a mirror-like way. BRDF describes how much light is reflected.
+
+Important: a surface cannot be both reflective and rough because the same amount of light is DISTRIBUTED between the two types. The more reflective a material is, it must also appear darker.
+
+BRDF describes what percent of light is reflected in a certain direction. But if we look at all directions the light is reflected, it must sum up to 1. i.e. ∫_{Ω} f(ωi, ωo) dωo ≤ 1, where the Ω is the hemisphere above the surface. The <= sign is because the surface can absorb some light.
+
+Terms:
+
+- incoming light: ωᵢ (ω)
+- outgoing light: ωₒ (v)
+
+Some material produce light, e.g. fluorescent material. This way the ∫_{Ω} f(ωi, ωo) can be greater than 1.
+
+Another property of BRDF is that it's symmetric. f(ωi, ωo) = f(ωo, ωi). This is because the light is reflected in the same way regardless of the direction of the light.
+
+So Lₒ(ωₒ) = Lᵢ(ωᵢ)cos(θᵢ)f(ωᵢ, ωₒ) where Lᵢ(ωᵢ) is the incoming light at direction ωᵢ.
+
+If we have multiple light sources, we can need to sum up the light from all sources. If the light is coming from all directions, we need to integrate over the hemisphere.
+
+Lₒ(ωₒ) = ∫_{Ω} Lᵢ(ωᵢ)cos(θᵢ)f(ωᵢ, ωₒ) dωᵢ
+
+In Blinn/Phong model, f(ωᵢ, ωₒ) = Kd + Ks (cos(ϕ))^α/cos(θ).
+
+Lᵢ(ωᵢ) can be from the light source, AND from light reflected off other objects. Lᵢ(ωᵢ) = L_{direct}(ωᵢ) + L_{indirect}(ωᵢ).
+
+The rendering techniques are about splitting the equation into multiple parts, and solve them separately.
+
+Note: for any direction ωᵢ, the light is coming from either the direct light source, or the indirect illumination. Not both. Because if a light is in indirect illumination, it means that direction is blocking the direct source. So we can split the integral into two parts, one direct and one for indirect illumination.
+
+Emission term.
+
+Subsurface. If light can come through the object, it can come from direction outside the hemisphere about the surface normal. Then fᵣ becomes fₛ, called Bidirectional Scattering Distribution Function (BSDF). And the integral will be taken over the whole sphere instead of the hemisphere. This enables support for refraction and subsurface scattering.
+
+** 13: Environment Mapping
+
+Requirement: the need to render something at the background of the models.
+
+Solution: Render a large sphere enclosing the scene, and put a texture on the interior of the sphere.
+
+Properties:
+
+- the sphere should act as if it's infinitely large
+  + therefore any ray from the camera to the sphere can be treated as if a ray originates from the origin of the sphere.
+  + only view direction matters, not the position of the camera
+  + the view direction is used to sample the environment texture
+
+The environment mapping: direction -> texture coordinate.
+
+Mapping functions:
+
+- spherical, equirectangular, latlong: looks like those 3d video format
+- light probe, angular: a sphere like shape
+  + actually generated by taking a photo of a reflective sphere
+  + then edit out the camera itself.
+  + problem: high distortion around the edge
+- vertical cross, cubic: *cube mapping*
+  + 6 faces of a cube
+  + supported by hardware
+
+
+Note: in cube map space, the z-axis is flipped. The positive z-axis is pointing towards the screen.
+
+#+begin_src c
+GLuint texId;
+glGenTextures(1, &texId);
+glBindTexture(GL_TEXTURE_CUBE_MAP, texId);
+glTexImage2D(
+  GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+  0, // mipmap level 0
+  GL_RGBA, // internal format
+  width, height,
+  0, // border (must be 0)
+  GL_RGBA, // format
+  GL_UNSIGNED_BYTE, // type
+  image_data
+);
+
+// then specify image for the remaining 5 faces.
+
+// then specify sampling parameters as usual
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+// specific to cube map
+// to avoid glitch at the edge for linear filtering by sampling crossing the face.
+// it has some extra cost so it's optional
+glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
+// build mipmap if necessary
+
+// bind to a texture unit and use it.
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_CUBE_MAP, texId);
+#+end_src
+
+Fragment shader:
+
+#+begin_src glsl
+layout(location = 0) out vec4 color;
+in vec3 dir; // note: not a texture coordinate, but a direction.
+uniform samplerCube envMap;
+
+void main() {
+  // opengl will figure out which face to sample automatically
+  // direction normalization is not necessary.
+  color = texture(envMap, dir);
+}
+#+end_src
+
+How to render the cube map?
+
+- We need to run the fragment shader to render each of the background pixels.
+- Naive way: just render a sphere around the scene
+  + it needs to be larger than the near clipping plane, but nearer than the far clipping plane. otherwise it will be invisible.
+  + problem: the sphere can occlude far away objects crossing the sphere.
+    - solution:
+      #+begin_src c
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      // draw background sphere
+      glClear(GL_DEPTH_BUFFER_BIT);
+      // draw scene objects
+      #+end_src
+      + wasteful to clear the depth buffer twice
+    - better solution:
+      #+begin_src c
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glDepthMask(GL_FALSE); // disable writing to depth buffer
+      // draw background sphere without modifying depth buffer
+      glDepthMask(GL_TRUE); // enable writing to depth buffer
+      // draw scene objects
+      #+end_src
+      + still somewhat expensive because we need to tessellate the sphere, and it has too many triangles
+- Alternative naive way: just render a cube around the scene
+  + place the cube in world coordinates.
+  + benefits: easy to tessellate
+  + still wasteful because we can see at most 3 faces of the cube at a time
+
+The better way: only render a plane at where the camera's pointing to.
+  + benefits: just two triangles
+  + need to figure out the place and orientation of the plane in world space
+  + in canonical view volume (clip space), we can define this plane quite easily
+    - It's just [-1 -1 z], [1 -1 z], [1 1 z], [-1 1 z]
+  + use inverse transform of the camera to put the plane in world space
+    - inverse of view-projection matrix
+    - compute the view direction in world space, and use it to sample the cube map
+  + how to choose z?
+    - 0 (middle of clip space) is fine
+    - -1 (near clipping plane) is fine.
+      + Note z=-1 is not the far plane because OpenGL uses left-handed coordinate system in clip space.
+      + This is not the same for view space/world space, where negative z is pointing into the screen.
+    - 1 (far clipping plane) is not good because it's considered just outside the frustum
+    - 0.9999 is fine
+
+Problem: every occluded pixel is drawn twice.
+
+- Solution: draw scene first, then draw the plane at z=0.999
+
+Can we do better at two triangles? Yes.
+
+- Yes. By drawing a single large triangle that covers the whole screen.
+  + [-1 -1 z], [3 -1 z], [-1 3 z]
+
+** 14: Reflections
+
+*** Environment reflection
+
+We need to start from rendering equation.
+
+- Separate the light into two parts: direct and environment
+- the environment term: ∫ L_{env}(ωᵢ)cos(θᵢ)f(ωᵢ, ωₒ) dωᵢ
+  + expensive to compute
+- trick: delta material (BRDF) for reflection. i.e. perfect reflection
+  + f_{Δ}(ωᵢ, ωₒ) = Kᵣ/cos(θᵢ) if ωᵢ = r. 0 otherwise.
+    - r: reflection direction: r = 2(n • ωₒ)n - ωₒ, or glsl =reflect= function
+    - Kᵣ: reflection color
+      + or use Kₛ (specular color) if the reflection color is not given.
+    - cos(θᵢ): compensational geometry term
+  + then the environment term is reduced to L_{env}(r)Kᵣ
+  + L_{env}(r) is the sampling of environment map
+
+Then the reflection color is retrieved from the environment map from the refelcted direction.
+
+*** Plane reflection
+
+A reflective plane reflects the camera's view. So we can just take the reflected view direction and use it to construct a new view matrix. Use that view matrix to render the whole scene at the same size as the view port, you will get a texture that looks like the reflection.
+
+Now back to draw the plane, now each pixel should have the color of the rendered texture at the same location.
+
+#+begin_src glsl
+vec2 uv = gl_FragCoord.xy; // the pixel coordinate in screen space
+vec3 K = texelFetch(world_texture, ivec2(uv), 0).rgb;
+#+end_src
+
+This type of reflection is actually accurate.
+
+*** Object reflection
+
+We do this type of reflection by taking a point inside the object, construct six perspective cameras of 90 degrees FoV, and point them to the six directions of a cube. The six rendered textures are then used to construct a cube map.
+
+Now when drawing the object, we can use the surface normal and the view direction to decide the reflected direction, then we use this direction to sample the rendered cube map.
+
+This type of reflection is only an approximate because we sampled the world from the point of view on the surface but a point interior to the object.
+
+This reflection is also quite expensive. While plane reflection requires rendering the scene one extra time, this type of reflection requires rendering the scene six extra times. So we need some optimization:
+
+- use lower resolution for the cube map because the reflection is not accurate anyway
+- render one face at a time, and use the result to construct the cube map
+- in real world scenarios, sometimes we can use a precomputed cube map at a number of fixed locations and use those for reflection instead of for each objects.
+
+** 15: Lights and Shadows
+
+Light attenuation. The light intensity decreases as the distance increases.
+
+So the light intensity from a direction at a point x is I = I_0 f_a(x) where f_a(x) is the attenuation function.
+
+Common attenuation functions:
+
+- Point light: f_a(d) = 1/(d²)
+  + d is distance
+  + intuition: dyson sphere
+  + problem: when d is too small, the light intensity is too high
+    - because there is no point light source with no size
+    - solution: use a sphere light source, "point* light source with a radius"
+      + f_a(d) = 2/r² (1-d/sqrt(d^2+r^2))
+- Area light
+  + more complicated
+    - need to consider not only distance, but also angle
+    - closed-form solution exists
+
+
+Shadow techniques:
+
+- ray tracing: shadow ray
+  + simple to implement
+  + general
+  + problem: "cancer" effect
+    - caused by floating point precision so the shadow ray intersects the object itself
+    - fixed by adding offset to the ray origin: "bias"
+    - different ways to handle the bias
+      + bad way to handle it: ignore the particular object because an object can cast shadow on itself
+  + not necessarily only usable for ray tracing the whole stuff
+    - some new gpu models allows sending rays from the pixel shader (fragment shader)
+      + unsupported by OpenGL
+  + costly for real-time rendering, although not much comparing to other types of rays
+- shadow mapping
+  + goal: determine if a point is visible from the light source's point of view
+    - draw a depth map from the light source's point of view
+    - then when rendering the actual image, find the corresponding position on the depth map, and determine if the depth of the point with respect to the light source is less than the depth in the depth map
+  + details:
+    - shadow map resolution
+    - filtering when sampling the shadow map
+    - bias
+  + problem: shadow resolution.
+    - not necessarily caused by low resolution shadow map
+    - maybe the light source is too far away and each pixel in shadow map covers too large area on the rendered image
+    - brilliant solution: perspective shadow map
+      + compute the shadow map in the canonical view volume instead of the world space
+      + because a directional light becomes a point light in the clip space
+        - also works for point light.
+      + problem: objects outside the canonical view volume will not cast shadows
+    - simpler solution: cascaded shadow map
+      + separate the scene into multiple parts, from near to far from the camera
+      + render shadow map for each part
+        - only render covered objects for each part
+        - using bounding box to track objects
+  + problem: only works with point/spot/directional light, not area light
+- shadow volume
+  + draw the scene without shadow first, then have another run to determine which pixels are in shadow
+  + procedure:
+    - generate a shape for each line in the scene from the light source
+      + triangle with point at the light source and chopped by the line, we only want the remaining polygon.
+    - render the scene normally with the camera
+    - render the polygons with the same camera
+      + track how many times the polygon is drawn on the pixel and determine if the polygon represent entering a shadow volume or exiting
+        - determined by dot product of the view direction with surface normal
+      + tracked with stencil buffer (integer per pixel)
+    - if the point is in shadow, it will have a positive number in the stencil buffer
+    - then render the scene again and deducing the shadowed pixels
+  + benefit: no resolution problem, perfect and hard boundary
+  + problem: not very efficient
+  + problem: only works with point/spot/directional light, not area light
+
+** 16: Shadow Mapping
+
+How to convert lights to cameras and take shadow maps.
+
+- Spot light: perspective projection with the expected FoV.
+  + Consider the rectangular cone (pyramid) of light instead of the circular cone.
+- Point light: cubemap for all 6 directions.
+- Directional: orthographic projection for a limited area.
+- Area light: more complicated, see light field camera. or approximated.
+
+How do render a depth map?
+
+1. figure out a "world to light" transformation matrix
+   + world space -> light space -> canonical view volume
+   + the light defines the two transformations
+     - matrixLight
+     - matrixLightProj
+     - let matrixMLP = matrixLightProj * matrixLight * matrixModel
+2. render to depth texture
+   - create framebuffer
+   - create depth texture
+     + use GL_DEPTH_COMPONENT for internalformat field in glTexImage2D
+     + more options: GL_DEPTH_COMPONENT{8,16,24,32,32F}
+     + GPU doesn't use IEEE floating point for depth buffer for default.
+       - It uses fixed point number format for the designed range [-1, 1], space divided equally.
+       - 24 bit is used the most.
+       - 32 bit fixed point has more precision than 32F, so it's unnecessary.
+       - maybe 32F can save a conversion.
+       - use 32F or 24.
+   - configure frame buffer
+   - render to the depth texture
+     + only need to clear depth buffer bit
+     + use a separate shadow program that has a bogus fragment shader
+       - even an empty string for fragment shader would work
+     + set MLP matrix as the mvp matrix uniform
+3. render the final graph normally
+   - set uniform for matrixShadow that transforms the point from camera's clip space to the shadow map's texture space
+     + let matrixShadow := T*S*matrixMLP
+       - S: uniform scale by 0.5
+       - T: translation by 0.5, 0.5, 0.5
+   - in vertex shader: ~out vec4 lightView_Position = matrixShadow * vec4(pos, 1)~.
+   - in fragment shader:
+     + ~vec3 p = lightView_Position.xyz/lightView_Position.w~
+     + shade normally
+     + ~color *= texture(shadow, p.xy).r < p.z ? 0 : 1~
+
+Shadow map filtering:
+
+- linear filtering is not very good
+  + first, we do not care the depth value itself. but we care about whether a point is in shadow.
+  + then, the shadow is either 0 or 1 from the ~color *= ...~ expression.
+- percentage closer filtering
+  + make shadow decision independently for the four nearest pixels in the shadow map
+    - generates a four points of either 0 or one
+  + then do a bilinear filtering on the four points
+  + also used for offline rendering to generate soft shadows
+  + gpu can accelerate the manual bilinear filtering if you specify the texture for depth comparison
+    - ~glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE)~
+    - ~glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);~
+    - then turn on bilinear filtering normally
+    - ~glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);~
+    - ~glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);~
+    - in shader code:
+    - ~color *= texture(shadow, p.xyz)~, note with the z sent to the sampler, the GPU does depth comparison filtering automatically.
+    - or:
+    - ~color *= textureProj(shadow, lightView_Position)~
+      + handles xyz/w automatically
+      + don't forget to use ~sampler2DShadow~ instead of ~sampler2D~ in the shader code
+
+Bias:
+
+- necessary to get rid of glitches.
+- bias is easy to add if you do the comparison manually
+- with GPU comparison
+  + incorporate the bias in transformation of =matrixShadow=
+  + let T be translation by =(0.5, 0.5, 0.5 - bias)=
+
+
+Extracurricular stuff:
+
+- variable bias based on geometric term solves for peter panning
+- setting no shadow for back face to solve shadow acne problem
+- render shadow pass in with front-face culling
+
+[[https://docs.google.com/presentation/d/1MwJcnSvkAzpT8BuoSqIkzlYLjdA_lBDrt8bW-vcwmDU/edit][GTR: Shadows]] - a presentation on various shadow techniques
+
+** 17: Geometry Shaders
+
+Geometry shader:
+
+- input: primitive
+  + types: =points= (1), =lines= (2), =triangles= (3)
+  + additional types: =lines_adjacency= (2+2overlap), =triangles_adjacency= (3+3overlap)
+  + the type doesn't matter, it's only the number of vertices that matters
+- output: any number of vertices
+  + types: =point=, =line_strip=, =triangle_strip=
+  + only one type, not mixed
+  + not necessarily only output a single primitive, can output multiple primitives
+- why do i have vertex shader when geometry shader can do more?
+  + vertex shader enables better parallelism (one vertex at a time)
+
+Geometry shader code:
+
+#+begin_src glsl
+#version 330 core
+layout(triangles) in;
+layout(line_strip, max_vertices = 5) out;
+
+void main() { ... }
+#+end_src
+
+Input and output of a geometry shader:
+
+#+begin_src glsl
+// the input and output
+in gl_PerVertex {
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
+} gl_in[];
+
+// custom data: vertex shader -> geometry shader
+// inside vertex shader
+out vec2 someData;
+
+// inside geometry shader
+in vec2 someData[];
+
+// custom data: geometry shader -> fragment shader
+// inside geometry shader
+out vec2 vData;
+
+// inside fragment shader (interpolated)
+in vec2 vData;
+#+end_src
+
+Emit:
+
+- =EmitVertex()=: emit a vertex
+- =EndPrimitive()=: end the current primitive, the last primitive does not need to be ended
+
+Geometry Shader Instancing:
+
+- Allows for running multiple geometry shaders on the same primitive, each generating data on their own.
+- ~layout ( triangles, invocations = 2 ) in;~
+- access ~gl_InvocationID~ to determine which instance is running
+- the invocations run in parallel
+
+Examples:
+
+- grass grown on mesh
+- model explosion effect
+- billboard particles: textured quad for drawing fake 3d particles
+  + render non-opaque texture on each quad
+  + convert each particle (point) into camera-facing quads
+- subdivision/tessellation
+  + convert a triangle into multiple triangles and add details
+  + allow rendering object in different resolutions
+  + geometry shader are not quite optimal for this, tessellation shader is better
+
+** 18: Tessellation Shaders
+
+Plain subdivision is not necessary because it only adds more work to the GPU. The true power of subdivision is that it can incorporate more details where necessary. Where does the detail come from? The texture.
+
+Why do we need tessellation? To render highly detailed objects, the bottleneck is the memory bandwidth. It's a more fundamental issue that is not easily tackled as for computation. If we send a low resolution model to the GPU and generate the detailed model on the GPU, we solve the memory bandwidth problem.
+
+Level of detail (LOD) is a technique to render objects in different resolutions based on the distance from the camera. The tessellation shader is a more general technique that can be used for LOD.
+
+Tessellation shaders are composed of three parts:
+
+- Tessellation control shader
+  + DirectX terminology: Hull shader
+  + It specifies how to subdivide the input primitive
+  + Input: several, plus extra data to pass to the tessellation evaluation shader
+  + Output: tessellation levels
+- Tessellator: hardware unit, does the actual tessellation
+  + Not programmable.
+  + Input:
+    - No primitive data
+      + It doesn't need to know the locations of primitives. The evaluation shader will take care of that.
+    - Actual input:
+      + Outer levels (OL)
+      + Inner levels (IL)
+    - The motive for the two level design is explained well the video.
+  + Output: Triangles, Quads, Isolines
+    - Quads are helpful for modeling because the subdivision for quads are much nicer than triangles.
+    - Isolines are like quads, but only the horizontal lines part
+- Tessellation evaluation shader
+  + DirectX terminology: Domain shader
+  + It generally moves each vertex by an offset
+  + like a vertex shader after the tessellation
+  + do we need vertex shader when we can do all work in tessellation evaluation shader?
+    - vertex shader is more efficient because we have fewer vertices to process
+  + Input: Vertex, Output: Vertex
+
+The tessellation shaders sits between the vertex shader and the geometry shader.
+
+Tessellation control shader code:
+
+#+begin_src glsl
+#version 410 core // tessellation shaders is added from 4.0
+
+layout(vertices = 4) out;
+
+in vec3 someData[]; // data from vertex shader
+out vec3 otherData[]; // data to send to tessellation evaluation shader
+
+void main(void) {
+  gl_TessLevelOuter[0] = 2.0;
+  gl_TessLevelOuter[1] = 4.0;
+  gl_TessLevelOuter[2] = 6.0;
+  gl_TessLevelOuter[3] = 8.0;
+
+  gl_TessLevelInner[0] = 8.0;
+  gl_TessLevelInner[1] = 8.0;
+
+  gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
+
+  // pass data to tessellation evaluation shader
+  otherData[gl_InvocationID] = someData[gl_InvocationID];
+}
+#+end_src
+
+- You can "expect" the shader to run once per primitive, but actually it runs once per invocation (vertex).
+  + the gl_TessLevelInner and gl_TessLevelOuter is only required to be set by one invocation.
+
+
+Tessellation evaluation shader code:
+
+#+begin_src glsl
+#version 410 core
+
+layout(quads, equal_spacing, ccw) in;
+
+in vec3 otherData[];
+
+vec4 interpolate(vec4 v0, vec4 v1, vec4 v2, vec4 v3) {
+  vec4 a = mix(v0, v1, gl_TessCoord.x);
+  vec4 b = mix(v2, v3, gl_TessCoord.x);
+  return mix(a, b, gl_TessCoord.y);
+}
+
+void main(void) {
+  gl_Position = interpolate( gl_in[0].gl_Position,
+                             gl_in[1].gl_Position,
+                             gl_in[2].gl_Position,
+                             gl_in[3].gl_Position );
+}
+#+end_src
+
+The input of tesselation control shader is called a *patch*. A patch is anything with N vertices. It's basically custom primitive.
+
+Usage of tessellation shaders:
+
+- =glPatchParameteri(GL_PATCH_VERTICES, 4)=: set the number of vertices in a patch
+  + this N should match the =vertices= in the =layout(vertices = N) out;= in the tessellation control shader
+- =glDrawArrays(GL_PATCHES, ...)=: draw the patches
+
+Examples of tessellation shaders:
+
+- extrusion for models e.g. spikes on a dragon
+- hair generation
+  + input: control hair points + bezier parameter
+  + generates bezier curve with tessellation shader
+  + generates multiple isolines for each hair
+    - outer levels[0]: number of hair strands
+    - outer levels[1]: number of segments per hair
+- fiber-level textile rendering
+
+** 19: Bump, Normal, Displacement, and Parallax Mapping
+
+Bump map:
+
+- vary the height of the surface to simulate bumps per fragment
+- also known as height map
+- the texture is grayscale: encodes height
+- determining the normal
+  + look at the neighboring texels to decide the surface normal
+- cons: needs to look at neighboring texels.
+
+Normal map:
+
+- store the normal of the surface in the texture
+- the texture's RGB encodes the XYZ of the normal
+- usually blue tinted because blue signifies Z+.
+- conversion [0,1] (color component) -> [-1,1] (normal component)
+  + ~normalize(2.0 * color - 1.0)~
+- normals are defined in local space (tangent space)
+  + tangent space:
+    - x: u direction (red), "tangent"
+    - y: v direction (green), "bitangent"
+    - z: normal direction (blue), "normal"
+- only good for local, small details
+
+Bump vs Normal map:
+
+- each bump map can be losslessly converted to a normal map at the same parameters
+  + height scale
+- the inverse is not true
+  + normal map is more flexible.
+
+Displacement map:
+
+- actually generating the geometry
+- can store RGB values for displacement in three directions
+  + typically only one direction is used
+- just modifying displacement is not enough for the details
+  + the modified surface normal is also needed
+  + displacement map is almost never used alone.
+    - possible: compute surface normal the same way as bump map
+  + usually used with normal map.
+- level of detail is limited by tessellation level
+- costly
+
+Per-pixel displacement map:
+
+- no actual geometry generated
+- consider the surface as lifted above all perturbations
+- for each fragment, trace the light ray using the displacement map to find the actual point of intersection
+  + volume tracing, ray marching
+  + check out GPU Gems 2
+- less expensive than actual displacement map but still costly for the ray tracing
+
+Parallax mapping:
+
+- approximating per-pixel displacement mapping
+  + approximate the ray tracing
+- algorithm
+  + for the light hit a point with uv, find the corresponding point on the texture H(uv)
+  + let duv := cos(view angle) * H(uv)
+  + read the texture at H(uv + duv)
+- looks good at head on direction, but not good at steep direction
+- optimization: steep parallax mapping
+  + divide the depth into discrete levels
+  + limit the maximal of duv to only go to next level
+  + perform the same algorithm iteratively until the intersecting height is lower
+  + more expensive but better result
+    - requires multiple dependent texture reads
+    - as many as the number of levels
+  + not perfect at steep angles, obvious step artifacts
+- optimization: steep occlusion mapping
+  + similar to steep parallax mapping
+  + when stop, calculate the intersection point more cleverly
+  + assume the intersections in the last step and previous step is flat
+  + then compute the intersection point based on the slope of the last two steps
+  + no step artifacts
+
+** 20: Compute and Mesh Shaders
+
+GPU is good at massive parallel computation. As soon as programmable shaders were introduced, people started to use shaders for computation other than rendering.
+
+GPGPU (General Purpose GPU) is the idea of using GPU for general computation. GPGPU pipeline:
+
+- Input data in place of vertex data
+- Extra input data as Texture and uniforms
+- Produce output data
+- Rasterization is gratuitous. So we just draw a single square with a bare minimum vertex shader.
+  + the computation is done in fragment shader and the input data is provided mostly by textures.
+
+Compute shader:
+
+- similar to fragment shader
+- only has one differentiating input (id)
+- inputs
+  + buffers
+  + textures
+  + uniform variables
+- output (both writeable and readable)
+  + does not have to be a color
+  + custom output format
+    - known as shader storage buffer
+  + supports output images as well
+
+Images in GLSL:
+
+- types
+  + float -> image2D
+  + int -> iimage2D
+  + uint -> uimage2D
+- generally known as gimage2D
+- ~gvec4 imageLoad(gimage img, IMAGE_COORD)~
+  - no texture filtering
+  - coordinates in type of ivecN
+- ~imageStore(gimage img, IMAGE_COORD, gvec4 VALUE)~
+- atomic operations
+  + ~gint imageAtomicExchange(...)~
+  + ~gint imageAtomicCompSwap(...)~
+  + ~gint imageAtomicAdd(...)~
+  + ...
+
+OpenGL API and GLSL texture type correspondence:
+
+| OpenGL                         | GLSL            |
+|--------------------------------+-----------------|
+| ~GL_TEXTURE_1D~                  | ~gimage1D~        |
+| ~GL_TEXTURE_2D~                  | ~gimage2D~        |
+| ~GL_TEXTURE_3D~                  | ~gimage3D~        |
+| ~GL_TEXTURE_CUBE_MAP~            | ~gimageCube~      |
+| ~GL_TEXTURE_RECTANGLE~           | ~gimage2DRect~    |
+| ~GL_TEXTURE_1D_ARRAY~            | ~gimage1DArray~   |
+| ~GL_TEXTURE_2D_ARRAY~            | ~gimage2DArray~   |
+| ~GL_TEXTURE_CUBE_MAP_ARRAY~      | ~gimageCubeArray~ |
+| ~GL_TEXTURE_BUFFER~              | ~gimageBuffer~    |
+| ~GL_TEXTURE_2D_MULTISAMPLE~      | ~gimage2DMS~      |
+| ~GL_TEXTURE_2D_MULTISAMPL_ARRAY~ | ~gimage2DMSArray~ |
+
+In addition, slices of higher dimensional images can be accessed as lower dimensional images.
+
+Binding image texture:
+
+#+begin_src c
+void glBindImageTexture(
+  GLuint unit, // image unit
+  GLuint texture, // texture id
+  GLint level, // mipmap level
+  GLboolean layered, // is the texture layered
+  GLint layer, // layer number
+  GLenum access, // access type (GL_READ_ONLY, GL_WRITE_ONLY, GL_READ_WRITE)
+  GLenum format // format
+);
+#+end_src
+
+Shader storage buffer object:
+
+- generate a buffer
+  + ~glGenBuffers(1, &buffer)~
+  + ~glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer)~
+- load data into it
+  + ~int data[SOME_SIZE]~
+  + ~glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(data), data, GL_STATIC_READ)~
+- use it as is
+  + ~glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, buffer)~
+  + the number corresponds to the binding point in the shader
+    - ~layout(std430, binding = 3) buffer myLayout { int something[]; } myData;~
+    - ~myData.something[123] = 5;~
+- unbind when done
+  + ~glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0)~
+
+Compiling a compute shader:
+
+#+begin_src c
+GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+glShaderSource(shader, 1, &source, NULL);
+glCompileShader(shader);
+
+GLuint program = glCreateProgram();
+glAttachShader(program, shader);
+glLinkProgram(program);
+#+end_src
+
+Running a compute shader:
+
+#+begin_src c
+glDispatchCompute(groups_x, groups_y, groups_z);
+#+end_src
+
+Work groups:
+
+- a group is a collection of "threads" running on the same warp
+  + a warp is a collections of cores placed together
+- opengl allows specifying three dimensions of groups
+  + groups_x, groups_y, groups_z
+  + each dimension specifies the number of work groups
+- each group can have up a number of threads
+  + known as a work group size in three dimensions
+    - size_x, size_y, size_z
+  + the shader can specify a specific work group size
+
+Groups of GPU cores:
+
+- NVIDIA: "warp" of 32 threads
+- AMD: "wavefront" of 64 threads
+- size_x * size_y * size_z <= max_work_group_size
+  + good if it's equal to the max_work_group_size, or it's not fully utilized
+
+Access to work group information in GLSL:
+
+- ~uvec3 gl_NumWorkGroups~: number of work groups
+- ~uvec3 gl_WorkGroupSize~: size of work group, same as ~layout local size~
+- ~uvec3 gl_WorkGroupID~: id of the work group
+- ~uvec3 gl_LocalInvocationID~: id of the thread in the work group
+- ~uvec3 gl_GlobalInvocationID~: id of the thread in the all work groups
+- ~uint gl_LocalInvocationIndex~: 1d version of the local id
+
+If other shader depends on the result of the compute shader, use ~glMemoryBarrier~ to make sure the data is ready.
+
+#+begin_src c
+// finish before using the output
+glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+// operations that use the output
+#+end_src
+
+Alternatives to compute shaders:
+
+- OpenCL
+- CUDA
+
+Mesh shaders:
+- Extension to OpenGL
+- Motivation
+  + the GPU graphics pipelines doesn't fit very well for the actual GPU hardware execution model
+  + compute shader is much better mapping to the actual hardware execution model
+    - for example, we can pass data between the local group
+- Mesh shader replaces the part of the pipeline
+  + vertex -> tessellation -> geometry
+  + the part of pipeline after rasterizer stays the same
+- The Mesh shader is a compute shader that outputs primitives
+  + unspecified input
+- Different programming model
+  + input data is pulled by mesh data instead of pushed like vertex data
+
+Two stage mesh shader:
+
+- Motivation
+  + if we use tesselation, then we have two stages of different levels of parallelism
+  + vertex shader and tessellation control shader deal with small number of vertices
+  + tesselation evaluation shader and geometry shader deal with large number of vertices
+  + the two stages are not very well balanced
+  + it would be better if we can have two stages of different levels of parallelism
+- Task shader -> (Mesh generation) -> Mesh shader
+  + task shader: generates the mesh data
+    - in each group, decide whether we want to dispatch mesh shader
+    - known by amplification shader in DirectX
+  + mesh shader: generates the vertices
+  + mesh generation:
+    - not actually generating stuff
+    - running the mesh shader
+
+Using mesh shader:
+
+#+begin_src c
+glDrawMeshTasksNV(int first, int count);
+#+end_src
+
+#+begin_src glsl
+#version 450 core
+#extension GL_NV_mesh_shader : require
+
+// like compute shader
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+// like geometry shader
+layout(triangles, max_vertices = 3, max_primitives = 1) out;
+
+void main() {
+  gl_MeshVerticesNV[0].gl_Position = ...;
+  gl_MeshVerticesNV[1].gl_Position = ...;
+  gl_MeshVerticesNV[2].gl_Position = ...;
+
+  gl_PrimitiveIndicesNV[0] = 0;
+  gl_PrimitiveIndicesNV[1] = 1;
+  gl_PrimitiveIndicesNV[2] = 2;
+
+  gl_PrimitiveCountNV = 1;
+}
+#+end_src
+
+Usage of mesh shader:
+
+- usually won't beat regular rasterization pipeline in performance
+- but may be useful for some unusual cases
+- Meshlet: process a model into meshlets
+  + useful for LOD: occlusion culling of meshlets
+  + different LOD for different meshlets
+
+** 21: Deferred, Variable-Rate, and Adaptive Shading
+
+Efficiency of rendering:
+
+- The load of pipeline before rasterization comes from *number of vertices* and *number of primitives*.
+  + if the load is high, one can decide to simplify the mesh, etc. to reduce the load
+- The load of fragment shader comes from *number of pixels*.
+  + 4k resolution: ~8M pixels
+  + usually much higher than the load before rasterization
+  + materials can be expensive to evaluate, lights are even more expensive
+  + no easy way to reduce the load here
+    - can render to a lower-resolution buffer but then upscale to screen size
+    - but users may expect full resolution
+
+Deferred shading:
+
+- motivation
+  + forward shading: regular pipeline, render each triangle to the framebuffer
+    - shaded fragment may get occluded by other fragments, voiding the effort
+- how
+  + forward pass: generate the data needed for each fragment
+    - stored in a screen-sized buffer known as G-buffer
+    - G-buffer contains multiple textures
+  + deferred pass: draw a screen sized quad, render using from the data generated in the forward pass
+    - do actual lighting, material, etc.
+- what to store in G-buffer
+  + material properties
+    - diffuse color
+    - specular color
+    - shininess
+  + normal
+  + depth
+  + other things needed
+- cons
+  + memory bandwidth
+    - need to squeeze the data as much as possible
+  + transparency doesn't work in this model
+    - render opaque objects first, then transparent objects
+  + difficult to implement anti-aliasing
+- other usages
+  + limited light range
+    - often small light sources only have limited range, so we may skip drawing the light source for pixels that are too far away
+    - solution: after forward pass and basic lighting (e.g. ambient, sunlight), we draw a sphere around the light source
+    - the sphere is drawn only so that we can shade the pixels that are inside the sphere, which defines the range of influence of the light source
+    - shade the pixels inside the sphere according to that light source
+
+Anti-aliasing:
+
+- the cause of aliasing:
+  + each pixel can only have one color
+- ideal solution: consider the percentage of area of a pixel and blend the colors accordingly
+- super sampling (SSAA)
+  + 4x, 8x, ... offline rendering: typically 64x
+  + shade every sample
+  + expensive
+- MSAA
+  + 4x z, 1x color
+  + each color shaded only once or (twice and blended) depending on the coverage
+  + shade ~1 sample per pixel
+  + built-in to the hardware
+  + but not compatible with deferred shading
+- FXAA, MLAA: blend neighboring pixels
+- TAA, TXAA: temporal anti-aliasing
+  + camera position jitters slightly (subpixel) each frame
+  + average with previous frame(s)
+  + standard in modern games
+    - because it works with deferred shading
+
+Variable-rate shading:
+
+- like MSAA but generalized
+- for parts of the screen that are less important, we can allocate groups of pixels into single samples
+- triangle edges are preserved
+  + better with large triangles
+- API
+  + DirectX tier-1: variable rate per draw call
+  + DirectX tier-2: variable rate per primitive
+  + generally supported image based one, GPU samples an image to decide the shading rate
+    - can be used with deferred shading
+    - in forward pass, compute where the shading rate should be high
+
+Adaptive shading:
+
+- Steps
+  + start by shading at a very low sample rate
+  + new samples at center of four samples from previous pass
+  + if the neighboring samples are similar
+    - interpolate
+  + or if the neighboring samples are different
+    - sample the new samples at a higher rate
+- Criteria for similarity
+  + final color
+  + material id
+  + surface normal
+- The degree of similarity can also be adjusted
+- Implementation
+  + in compute shader: Deferred Adaptive Compute Shading (DACS)
+    - deferred pass using a compute shader
+  + hardware support
+    - hardware scatter tiles for DACS
+  + automatic hardware support is not yet available
+
+Comment: This is such an elegant optimization!
+
+** 22: Global Illumination
+
+Incoming light: direct light + indirect light
+
+Computing indirect light is difficult:
+
+- light bounces off surfaces, potentially infinite bounces
+- needs to consider all directions in the hemisphere (see rendering equation)
+
+Color bleeding: light bounces off surfaces and colors the other surfaces slightly
+
+- may not be consciously noticeable
+- but contributes a lot to the realism
+
+Radiosity:
+
+- discretize the scene into patches (e.g. triangles)
+- compute the influence of lighting between each pair of patches
+  + consider each surface as diffuse surface
+  + form a linear set of equation that can be solved numerically to infinite number of bounces
+
+Path tracing:
+
+- the standard method for global illumination
+- based on ray tracing
+- for indirect lighting, randomly sample a direction, trace a ray, and compute the color from direct lighting
+  + recursively do that with many samples.
+- pretty noisy, requires a lot of samples to reduce noise
+- reduce noise by weighted sampling towards the more important directions (e.g. light sources)
+- denoising "magic"
+  + assumption: indirect lighting at nearby samples are similar
+  + interpolate the indirect lighting from nearby samples
+  + many methods. area of active research
+    - ai denoiser, etc.
+
+Voxel Cone Tracing:
+
+- like ray tracing, instead of using rays, use cones
+- convert the scene into a voxel grid
+- use cones to calculate the indirect lighting
+
+Instant Radiosity:
+
+
+- is not instant and has little to do with the Radiosity technique
+  + Cem calls the technique "virtual lights"
+- idea: each point receives light is giving off light, like a light source itself
+- method
+  + randomly pick a certain numbers of points from the light source in the scene as virtual lights
+  + for shading each pixels, treat as if the scene is lit by all the virtual lights
+  + like path tracing, but in reverse
+- cons:
+  + only look at one bounce
+    - can do multiple bounces
+  + can be expensive with many virtual lights
+
+Solutions to many light problem:
+
+- stochastic lightcuts
+- lighting grid hierarchy
+
+Precomputed Global Illumination:
+
+- For predefined points in the scene, compute the indirect lighting
+  + Do this precomputation offline
+- In real-time rendering, look up the precomputed data and interpolate between them
+- Does not work well with dynamic scenes
+
+Light mapping:
+
+- precomputed shading for surfaces in response to light stored as a texture
+- only non-view dependent lighting are stored
+
+** 23: Ambient Occlusion and Soft Shadows
+
+The source of the ambient term in shading:
+
+- the rendering equation: L_o = direct illumination + indirect illumination
+- indirect illumination: ∫_Ω L_i * f * cosθ dω
+  + L_i: incoming light
+  + f: BRDF
+  + cosθ: Lambert's cosine law
+  + dω: solid angle
+- approximate the ambient lighting to be constant: L_i = L_a (constant)
+- then the indirect term becomes L_a * ∫_Ω f * cosθ dω
+- the integral ∫_Ω f * cosθ dω is some property only depending on the material
+  + let ambient color K_a = ∫_Ω f * cosθ dω
+- indirect term becomes K_a * L_a
+
+Ambient occlusion:
+
+- The same way we abstract a constant ambient light, except we multiply by an occlusion factor
+  + ∫_Ω L_i * cosθ K_a/π dω
+  + L_i = L_a * V(ω_i)
+    - L_a: ambient light (constant)
+    - visibility V(ω_i) is a binary term that is 1 if the point is visible from the direction ω_i
+      + whether or not the point is occluded from ambient light
+  + BRDF: f = K_a/π
+- the equation simplifies to: L_a K_a (1/π) ∫_Ω V(ω_i) cosθ dω
+  + ∫_Ω cosθ dω = π (assuming visibility is 1 on all directions)
+  + thus the ambient occlusion term (1/π) ∫_Ω V(ω_i) cosθ dω has range [0, 1]
+- not global illumination but gives good results
+  + add details from environment
+  + no color bleeding effect
+
+How to compute visibility:
+
+- method: ray tracing to a distance
+  + emit rays in equally spaced directions
+  + check the rays that hits an object within a certain distance (too far = not occluded)
+  + calculate the ratio
+  + problem:
+    - just one step closer to global illumination, may as well do global illumination
+    - still cheaper than global illumination because we do not need to shade the secondary rays
+    - expensive for interactive rendering
+- faster method: screen space ambient occlusion (SSAO)
+  + a fast approximation method to calculate ambient occlusion
+  + estimate for each pixel if it's occluded based on the depths of the neighboring pixels
+  + multi-resolution method for better results (MSSAO)
+
+Soft shadows:
+
+- hard shadows: small light, sharp shadow
+- soft shadows: large light (e.g. area light)
+  + larger light -> larger specular highlight (harder to notice than soft shadows)
+- why do we get soft shadows?
+  + a point can be in partial shadow
+  + it's not a binary decision
+
+How to calculate occlusion ratio for soft shadows:
+
+- method 1: shadow ray tracing: straightforward
+- method 2: generate a lot of shadow maps from sampled points on the area light
+  - then calculate occlusion from these shadow maps
+  - equivalent to ray tracing but faster
+  - visual artifact: visible hard edges
+- method 3: percentage closer filtering (PCSS)
+  - we previously discussed this for shadow mapping
+    + bilinear filtering for shadow decisions (NOTE: not depth values)
+  - but we can look at a larger neighboring region. then the shadow will be more blurred
+  - too expensive, 9x9 neighborhood = 81 shadow map lookup
+    + in interactive rendering, usually sample N points at this neighborhood
+  - another problem is, the shadow should be softer if it's further away from the occlusion, and harder at the base
+    + adjust the size of neighborhood based on the distance
+      - the size of the neighborhood can be calculated
+        + proportional to light size (constant) and distance from the occluder (read from light map)
+      - technique known as percentage closer soft shadows (PCSS)
+      - problem: pixels not occluded by the pseudo point light source in shadow map, but actually occluded by some area
+        + then we cannot get the correct distance to the occluder
+        + solution: find occluder at a neighborhood
+  - still not very cheap
+- PCSS approximate methods
+  + a list
+    - Variance shadow mapping (VSM)
+    - Convolution shadow mapping (CSM)
+    - Exponential shadow mapping (ESM)
+  + approximating PCSS at a lower cost
+- other methods: e.g. using signed distance field
+- there is no perfect solution :(
+
+** 24: Refractions, Transparency, Blending, and Alpha Testing
+
+Terminology: transparency
+
+- a glass globe is more accurately described as refractive
+- a transparent object is one that allows light to pass through
+  + like a semi-transparent drape
+
+Refraction:
+
+- rendering equation
+  + refraction light comes from below the surface of the hemisphere.
+  + integrate over Ω -> S^2
+  + BRDF -> BSDF (bi-directional scattering distribution function)
+  + we only consider the below hemisphere: -Ω
+- we can calculate the refraction direction using Snell's law
+  + glsl function: ~refract(ω_o, n, n_{air}/n_{glass})~
+- calculate the light coming from the refracted direction
+  + method 1: use cube map to know light from any direction
+    - cons: inaccurate because we ignored the back surface
+  + method 2: image-space approach (Chris Wyman, 2005)
+    - pre-render pass to render back face first
+      + needs the depth and the surface normal data
+    - use both depth values of the front and back face to calculate the distance
+    - use the distance to approximate where the light would be on the back face (uv)
+    - use that surface normal map (uv) at the point, find the outgoing ray direction
+    - cons: needs to use custom cube map for refracting objects behind the glass
+  + method 3: image-space refraction of nearby geometry (Chris Wyman, 2005)
+    - render the scene behind the glass object into a texture
+    - lookup the rendered texture color at the calculated uv
+
+Rendering windows:
+
+- most typical refractive object in a scene
+- definition of a window
+  + both face are flat
+  + thin
+  + so it looks like transparency
+- method:
+  + constant offset (?)
+  + or view direction dependent constant offset (?)
+  + alpha blending
+
+Alpha blending:
+
+- equivalent to surface scattered with invisible holes
+  + hole:solid ratio is α_f
+- c = α_f * c_f + (1 - α_f) * c_b
+  + c: final color
+  + c_b: background color
+  + c_f: front color
+  + α_f: alpha of the front color
+- used for transparency
+
+#+begin_src c
+glEnable(GL_BLEND);
+//          blend front   blend back
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+// for pre–multiplied alpha
+glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+#+end_src
+
+Blending options:
+
+- ~GL_ZERO~
+- ~GL_ONE~
+- ~GL_SRC_COLOR~
+- ~GL_ONE_MINUS_SRC_COLOR~
+- ~GL_DST_COLOR~
+- ...
+
+Caveat for transparency:
+
+- z-buffer rasterization is not enough for transparency
+- transparency needs to be rendered from back to front
+  + or the back object will not be rendered even if it's after the front object
+- alternative: A-buffer rasterization
+  + store all fragments in a linked list
+  + not implemented on hardware
+- ordering all triangles of a mesh based on view direction is expensive
+
+Order-independent transparency:
+
+- A-buffer is not supported by GPU
+  + software implementation is possible
+  + useful for rendering hair
+    - hair strands are so thin that they are essentially semi-transparent
+    - and it can be overlapping a lot
+- depth peeling
+  + render the scene as if there is no transparency
+  + render the scene again, use the depth buffer in first pass to ignore the first layer (directly visible)
+  + render the scene again, use the depth buffer in second pass to ignore the first two visible layers
+  + repeat
+  + use alpha blending to blend all the layers
+
+Another trick for rendering hair:
+
+- split the hair strands into three groups
+- render the hair strands as opaque
+- take the average of the three renders
+- the result looks fine
+
+Alpha testing:
+
+- useful for rendering foliage
+- render a simple quad
+  + use a texture with transparency that draws the foliage
+  + on each fragment, if the alpha is below a certain threshold, discard the fragment, otherwise keep it
+- hardware support
+  + ~glEnable(GL_ALPHA_TEST)~
+  + ~glAlphaFunc(GL_GREATER, 0.5)~
+- a lot cheaper than correct alpha blending, which needs ordering
+- problem: aliasing
+  + solution: alpha to coverage
+    - like MSAA, but treat the alpha value as the percentage coverage
+- problem
+  + far away objects are rendered incompletely
+  + cause: mip-map blurring alpha value, sometimes alpha value goes below the threshold, so the pixel is completely gone
+  + solutions
+    - hashed alpha testing (Chris Wyman, 2017): randomly pick a number as alpha value
+      + cons: dithering look
+    - use alpha distribution for alpha testing
+      + dither alpha value for each fragment so the alpha is either 0 or 1
+- usage examples
+  + foliage
+  + hair/facial hair
+  + barbed wire walls
+  + bushes of grass
+
+** 25: Volume Rendering
+
+Applications of volume rendering:
+
+- smoke column
+- cloud
+- visualization of science data (often interactive)
+  + medical data
+  + geology
+  + archaeology
+  + material science
+  + biology
+  + computer science, etc
+
+Rendering slices:
+
+- method 1: rectangular slices
+  - ordered slices using alpha blending
+  - from back to front based on camera
+  - needs to determine which order to traverse
+  - cons:
+    + the distance between layer determines the level of detail quality
+      - solution: generate more slices based on view direction
+- method 2: generate polygon slices from view angle at constant depth
+  + benefits: consistent depth steps
+  + cpu: slow
+  + geometry shader: better
+- method 3: draw quads with custom clipping
+  + easier to implement, faster
+  + ~glClipPlane~, ~glEnable(GL_CLIP_PLANE)~
+
+Transfer function:
+
+- the 3d-texture may not be color data we want to visualize
+- need a transfer function (TF) to convert the data to RGBA
+  - TF picks the parts of the data we actually care about
+- some professional software allow user defined transfer function
+- application:
+  + view only skull from a CT scan
+  + view skull with skin/muscle overlay
+
+Volumetric visibility:
+
+- particles in the volume can absorb and emit light
+- absorption: constant absorption throughout the volume: exponential decay
+- emission: light emitted from the particles, that goes through exponential decay as well
+- scattering: more complicated
+- keyword: Volume Rendering Equation
+- needs to integrate over a light ray (from camera to outside the volume)
+
+Volume tracing:
+
+- ray marching: like ray tracing, but only in small steps
+  + large steps: low quality, small steps: costly
+- better technique: woodcock tracking/delta tracking
+  + importance sampling (probability of seeing through at a point)
+  + however, not easy to calculate the probability for non-constant density
+  + solution:
+    1. assume constant density, pick a point
+    2. generate a random number, if it's below the actual density, keep the point
+    3. otherwise continue moving away from camera and randomly pick a new point
+    4. do it until a point is chosen
+
+Opacity shadow map:
+
+- calculate a shadow map for each slice.
+
+** 26: GPU Ray Tracing
+
+Most interactive application is not ray tracing or rasterization, but a combination of both.
+
+Rasterization pipeline:
+
+1. input primitives
+2. vertex processing (vertex shader + tessellation + geometry shader)
+3. rasterization
+4. fragment shader
+
+Ray tracing pipeline:
+
+1. input pixels
+2. ray generation (programmable)
+   - produce the final image
+3. ray tracing
+   - traverse scene
+   - intersection shader (programmable)
+     + so we can support any primitive types (e.g. sphere)
+     + not limited to one type of primitive
+     + fn(primitive)->bool
+     + if no intersection, go back to traverse scene
+   - for intersection, determine if it's the closest intersection
+     + if not, go back to traverse scene
+   - for intersection, determine if it's opaque
+     + if not opaque, run an any-hit shader (programmable)
+       - determine what to do with the intersection
+         + either update hit data
+         + or go back to scene traversal
+   - if intersection on opaque object, calculate the hit data
+   - go back to traverse scene
+4. hit/miss shader (programmable)
+   - two separate shaders: hit shader and miss shader
+   - input: hit data
+   - send back to 2. ray generation
+
+Ray tracing shader support:
+
+- DiredX tier-1: inline ray tracing, run ray tracing from any shader, even compute shader
+
+Traverse scene:
+
+- scene definition: primitives
+  + bounding volume hierarchy (BVH)
+  + other acceleration structures
+- how gpu traverse the scene exactly? should be opaque to the user
+
+Sampling with ray tracing:
+
+- example: sampling shadow rays to calculate soft shadows
+- L_o(ω_o) = ∫_Ω L_i(ω_i) f(ω_i, ω_o) cosθ dω_i
+  + L_o(ω_o) ~= 1/N ∑_i=1^N L_i(ω_i) f(ω_i, ω_o) cosθ
+  + N: number of samples
+- path tracing: 10,000 samples, or larger per pixel
+  + otherwise we have noisy data
+  + each sample corresponds to many rays
+- we cannot afford to do this in real-time
+- solution: denoising, and trace ~1-2 sample per pixel
+  + e.g. NVIDIA Real-Time Denoiser (NRD)
+- we use rasterization for primary visibility because it saves one ray per pixel!
+
+GPU ray tracing course: http://intro-to-dxr.cwyman.org/
